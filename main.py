@@ -260,6 +260,9 @@ _STATS_DEFAULT = {
         "game_seconds": 0,
         "crashed":      False,
     },
+    "prefs": {
+        "hint_shown": False,   # set True after user dismisses the hint window
+    },
 }
 
 def _fmt_duration(seconds: int) -> str:
@@ -422,6 +425,15 @@ class StatsManager:
 
     def last_run_games(self) -> int:
         return self._data["last_run"]["games"]
+
+    @property
+    def hint_shown(self) -> bool:
+        return self._data["prefs"].get("hint_shown", False)
+
+    def mark_hint_shown(self) -> None:
+        with self._lock:
+            self._data["prefs"]["hint_shown"] = True
+            self._save()
 
     # ── Console summary ───────────────────────────────────────────────────────
 
@@ -929,8 +941,13 @@ def main() -> None:
     threading.Thread(target=pid_watch_loop,           daemon=True).start()
     threading.Thread(target=sniffer_loop, args=(bpf,), daemon=True).start()
 
-    overlay = Overlay()
+    overlay = Overlay(
+        on_hint_dismissed=stats.mark_hint_shown,
+        show_hint_on_start=True,
+        )
     overlay.app.aboutToQuit.connect(stats.on_session_end)
+    if not stats.hint_shown:
+        overlay.show_hint()
     overlay.run()
 
 

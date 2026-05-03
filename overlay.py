@@ -41,11 +41,15 @@ _WINDOW_FLAGS = (
 )
 
 # ── Colors ────────────────────────────────────────────────────────────────────
-
-_IDLE_ACCENT  = QColor("#387CBC")
-_ACTIVE_ACCENT = QColor("#9C10C8")
+# bright-purple     #9C10C8
+# blue              #387CBC
+# gold              #CCB980
+# purple            #8E47DE
+_IDLE_ACCENT   = QColor("#387CBC")
+_ACTIVE_ACCENT = QColor("#8E47DE")
+_GOLD_ACCENT   = QColor("#CCB980")
 _BG           = QColor(14, 14, 14, 210)
-_BORDER       = QColor(255, 255, 255, 14)
+_BORDER       = QColor(255, 255, 255, 100)
 _TEXT_PRIMARY = QColor(255, 255, 255, 220)
 _TEXT_MUTED   = QColor(255, 255, 255, 80)
 _TEXT_DIM     = QColor(255, 255, 255, 40)
@@ -60,6 +64,15 @@ def _fmt_game_time(centiseconds: int) -> str:
         return f"{h}:{m:02d}:{s:02d}:{cs:02d}"
     return f"{m:02d}:{s:02d}:{cs:02d}"
 
+# ── Misc Positioning & Sizing ─────────────────────────────────────────────────
+
+# use to alter relative position of orb on the stat panel
+STAT_PANEL_Y_OFFSET = -17
+DOT_X_OFFSET = 205
+DOT_SIZE = 12
+
+# STAT_PANEL_Y_OFFSET = 10
+# DOT_X_OFFSET = 180
 
 # ── StatPanel ─────────────────────────────────────────────────────────────────
 
@@ -72,6 +85,8 @@ class StatPanel(QWidget):
         self.game_count   = 0
         self.in_game      = False
         self._game_start: Optional[float] = None
+        self._last_game_duration = 0
+
 
         self.setWindowFlags(_WINDOW_FLAGS | Qt.WindowType.WindowTransparentForInput)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -90,6 +105,8 @@ class StatPanel(QWidget):
         self.update()
 
     def on_left(self) -> None:
+        if self._game_start is not None:
+            self._last_game_duration = self._elapsed_cs()
         self.in_game     = False
         self._game_start = None
         self.update()
@@ -107,28 +124,31 @@ class StatPanel(QWidget):
         W, H        = self.W, self.H
         BAR, PAD, R = 3, 10, 6
 
+        # background box
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(_BG)
         p.drawRoundedRect(0, 0, W, H, R, R)
 
-        pen = QPen(_BORDER)
-        pen.setWidthF(0.8)
+        # background box border
+        pen = QPen(_GOLD_ACCENT)
+        pen.setWidthF(1)
         p.setPen(pen)
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawRoundedRect(0, 0, W - 1, H - 1, R, R)
 
+        # sidebar
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(accent)
-        p.drawRoundedRect(0, 0, BAR * 2, H, R, R)
-        p.fillRect(BAR, 0, BAR, H, accent)
+        # p.setBrush(accent)
+        # p.drawRoundedRect(0, 0, BAR * 2, H, R, R)
+        # p.fillRect(BAR, 0, BAR, H, accent)
 
         X = BAR + PAD
 
-        f_count  = QFont("Segoe UI", 22, QFont.Weight.Bold)
-        f_label  = QFont("Segoe UI", 8)
+        f_count  = QFont("Consolas", 22) # integer text
+        f_label  = QFont("Segoe UI", 8) # "GAMES" label
         f_label.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.4)
-        f_stat   = QFont("Consolas", 11, QFont.Weight.Bold)
-        f_stat_l = QFont("Segoe UI", 7)
+        f_stat   = QFont("Consolas", 11) # game timer
+        f_stat_l = QFont("Segoe UI", 7) # "GAME" label above timer
         f_stat_l.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.2)
 
         def shadow_text(px, py, text, font, color):
@@ -142,19 +162,26 @@ class StatPanel(QWidget):
         p.setFont(f_count)
         fm_count  = QFontMetrics(f_count)
         count_w   = fm_count.horizontalAdvance(count_str)
-        shadow_text(X, 36, count_str, f_count, _TEXT_PRIMARY)
+        shadow_text(X, 36, count_str, f_count, _GOLD_ACCENT)
 
         lbl = "IN GAME" if self.in_game else "GAMES"
-        shadow_text(X + count_w + 7, 28, lbl, f_label, accent)
+        shadow_text(X + count_w + 7, 28, lbl, f_label, _GOLD_ACCENT)
 
         div_pen = QPen(_TEXT_DIM)
         div_pen.setWidthF(0.6)
         p.setPen(div_pen)
         p.drawLine(X, 44, W - 8, 44)
 
+        
         if self.in_game:
-            shadow_text(X, 63, "GAME", f_stat_l, _TEXT_MUTED)
+            shadow_text(X, 63, "DURATION", f_stat_l, _TEXT_MUTED)
             timer_str = _fmt_game_time(self._elapsed_cs())
+            p.setFont(f_stat)
+            tw = QFontMetrics(f_stat).horizontalAdvance(timer_str)
+            shadow_text(W - 8 - tw, 63, timer_str, f_stat, accent)
+        else:
+            shadow_text(X, 63, "PREVIOUS", f_stat_l, _TEXT_MUTED)
+            timer_str = _fmt_game_time(self._last_game_duration)
             p.setFont(f_stat)
             tw = QFontMetrics(f_stat).horizontalAdvance(timer_str)
             shadow_text(W - 8 - tw, 63, timer_str, f_stat, accent)
@@ -171,9 +198,9 @@ class DotWindow(QWidget):
       Ctrl + right-click → fires on_context_menu at cursor position
     """
 
-    ORB_X = 14
+    ORB_X = DOT_X_OFFSET
     ORB_Y = 20
-    ORB_R = 7
+    ORB_R = DOT_SIZE
 
     def __init__(
         self,
@@ -193,7 +220,8 @@ class DotWindow(QWidget):
 
         self.setWindowFlags(_WINDOW_FLAGS)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(40, 40)
+        # actual window background drawable area
+        self.setFixedSize(300, 100)
         self.move(x, y)
         self.show()
 
@@ -204,20 +232,23 @@ class DotWindow(QWidget):
         accent    = _ACTIVE_ACCENT if self.in_game else _IDLE_ACCENT
         cx, cy, r = self.ORB_X, self.ORB_Y, self.ORB_R
 
+        # glow effect
         glow = QColor(accent)
-        glow.setAlpha(35)
+        glow.setAlpha(25)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(glow)
         p.drawEllipse(cx - r - 4, cy - r - 4, (r + 4) * 2, (r + 4) * 2)
 
+        # orb border
         ring_pen = QPen(accent)
         ring_pen.setWidthF(1.6)
         p.setPen(ring_pen)
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawEllipse(cx - r, cy - r, r * 2, r * 2)
 
+    
         fill = QColor(accent)
-        fill.setAlpha(60)
+        fill.setAlpha(100)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(fill)
         p.drawEllipse(cx - r + 2, cy - r + 2, (r - 2) * 2, (r - 2) * 2)
@@ -225,7 +256,10 @@ class DotWindow(QWidget):
         p.end()
 
     def _sync_panel(self) -> None:
-        self._panel.move(self.x() + 46, self.y() - 22)
+        self._panel.move(self.x() + 46, self.y() - STAT_PANEL_Y_OFFSET)
+        self._panel.stackUnder(self)
+        self.raise_()
+        self.activateWindow()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
@@ -246,6 +280,10 @@ class DotWindow(QWidget):
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         self._drag_pos = None
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self.raise_()
 
 
 # ── Overlay (implements OverlayBase) ──────────────────────────────────────────
@@ -272,8 +310,11 @@ class Overlay(OverlayBase):
             on_context_menu or (lambda pos: None),
             on_moved,
         )
-        self._panel.move(x + 46, y - 22)
+        self._panel.move(x + 46, y - STAT_PANEL_Y_OFFSET)
+        self._panel.stackUnder(self._dot)
+        
         self._dot.raise_()
+        self._dot.activateWindow()
 
     # ── OverlayBase interface ─────────────────────────────────────────────────
 
@@ -295,7 +336,10 @@ class Overlay(OverlayBase):
 
     def move_to(self, pos: QPoint) -> None:
         self._dot.move(pos)
-        self._panel.move(pos.x() + 46, pos.y() - 22)
+        self._panel.move(pos.x() + 46, pos.y() - STAT_PANEL_Y_OFFSET)
+        self._panel.stackUnder(self._dot)
+        self._dot.raise_()
+        self._dot.activateWindow()
 
     def set_game_count(self, count: int) -> None:
         self._panel.game_count  = count
@@ -312,8 +356,8 @@ class Overlay(OverlayBase):
         self._dot.locked = locked
 
     def show(self) -> None:
-        self._dot.show()
         self._panel.show()
+        self._dot.show()
 
     def hide(self) -> None:
         self._dot.hide()

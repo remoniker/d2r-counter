@@ -263,7 +263,7 @@ class HintWindow(QWidget):
         Arrow tip lands 20px above the orb top.
         """
         x = anchor.x()
-        y = anchor.y() - H - 8   # 8px gap — arrow tip lands just above the orb
+        y = anchor.y() - H - 80   # 8px gap — arrow tip lands just above the orb
         screen = QApplication.primaryScreen().geometry()
         x = max(0, min(x, screen.width()  - W))
         y = max(0, min(y, screen.height() - H))

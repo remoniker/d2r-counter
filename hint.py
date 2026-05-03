@@ -1,5 +1,5 @@
 """
-hint_window.py — First-run tutorial popup for D2R Tracker.
+hint.py — First-run tutorial popup for D2R Tracker.
 
 Shown automatically on first launch (controlled by stats.json flag).
 Accessible any time via the Ctrl+right-click menu.

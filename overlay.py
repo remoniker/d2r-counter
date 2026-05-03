@@ -1,33 +1,37 @@
+"""
+overlay.py — Default overlay style for D2R Counter.
+
+A pure display class — owns only the orb (DotWindow) and stat panel
+(StatPanel). Has no system tray, no menu logic, no hint management.
+All of that lives in OverlayManager.
+
+Implements the OverlayBase interface so OverlayManager can swap styles.
+
+Ctrl + left-drag  → reposition (calls on_moved so manager can follow)
+Ctrl + right-click → fires on_context_menu callback (manager builds/shows menu)
+"""
+
 import sys
 import time
 from typing import Optional, Callable
 
-from hint import HintWindow
-
 try:
-    from PyQt6.QtWidgets import (
-        QApplication, QWidget, QSystemTrayIcon, QMenu
-    )
-    from PyQt6.QtCore import Qt, QObject, pyqtSignal, QPoint, QTimer
+    from PyQt6.QtWidgets import QApplication, QWidget
+    from PyQt6.QtCore import Qt, QPoint
     from PyQt6.QtGui import (
         QPainter, QColor, QFont, QFontMetrics,
-        QMouseEvent, QIcon, QPen, QCursor, QAction
+        QMouseEvent, QPen, QCursor
     )
 except ImportError:
     raise
+
+from overlay_signals import signals
+from overlay_base import OverlayBase
 
 _app = QApplication.instance() or QApplication(sys.argv)
 screen = QApplication.primaryScreen().geometry()
 OVERLAY_X = int(screen.width() / 2)
 OVERLAY_Y = int(screen.height() / 2)
-
-
-class GameSignals(QObject):
-    joined = pyqtSignal()
-    left   = pyqtSignal()
-
-
-signals = GameSignals()
 
 _WINDOW_FLAGS = (
     Qt.WindowType.FramelessWindowHint      |
@@ -38,66 +42,13 @@ _WINDOW_FLAGS = (
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 
-_IDLE_ACCENT   = QColor("#387CBC")
+_IDLE_ACCENT  = QColor("#387CBC")
 _ACTIVE_ACCENT = QColor("#9C10C8")
-
-_BG            = QColor(14, 14, 14, 210)
-_BORDER        = QColor(255, 255, 255, 14)
-_TEXT_PRIMARY  = QColor(255, 255, 255, 220)
-_TEXT_MUTED    = QColor(255, 255, 255, 80)
-_TEXT_DIM      = QColor(255, 255, 255, 40)
-
-# ── Context menu stylesheet ───────────────────────────────────────────────────
-#
-# Matches the overlay's dark glass aesthetic:
-#   • Near-black solid background (rgba is unreliable in QSS menus on Windows)
-#   • Blue accent left-border strip on hover — matches idle orb color
-#   • Disabled header item acts as a non-interactive section title
-#   • Separators are single-pixel dim lines with horizontal margin
-#   • Items have vertical breathing room and rounded corners
-#
-_MENU_QSS = """
-QMenu {
-    background-color: rgb(14, 14, 14);
-    border: 1px solid rgb(48, 48, 48);
-    border-radius: 8px;
-    padding: 5px 0px;
-    font-family: "Segoe UI";
-    font-size: 9pt;
-    color: rgb(210, 210, 210);
-}
-
-QMenu::item {
-    padding: 6px 24px 6px 14px;
-    margin: 1px 5px;
-    border-radius: 4px;
-    border-left: 3px solid transparent;
-}
-
-QMenu::item:selected {
-    background-color: rgba(56, 124, 188, 35);
-    border-left: 3px solid #387CBC;
-    color: rgb(255, 255, 255);
-}
-
-QMenu::item:pressed {
-    background-color: rgba(56, 124, 188, 60);
-}
-
-QMenu::item:disabled {
-    color: rgb(58, 58, 58);
-    border-left: 3px solid transparent;
-    background: transparent;
-}
-
-QMenu::separator {
-    height: 1px;
-    background-color: rgb(38, 38, 38);
-    margin: 4px 10px;
-}
-"""
-
-_MENU_HEADER = "D2R  TRACKER"
+_BG           = QColor(14, 14, 14, 210)
+_BORDER       = QColor(255, 255, 255, 14)
+_TEXT_PRIMARY = QColor(255, 255, 255, 220)
+_TEXT_MUTED   = QColor(255, 255, 255, 80)
+_TEXT_DIM     = QColor(255, 255, 255, 40)
 
 
 def _fmt_game_time(centiseconds: int) -> str:
@@ -152,8 +103,8 @@ class StatPanel(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        accent     = _ACTIVE_ACCENT if self.in_game else _IDLE_ACCENT
-        W, H       = self.W, self.H
+        accent      = _ACTIVE_ACCENT if self.in_game else _IDLE_ACCENT
+        W, H        = self.W, self.H
         BAR, PAD, R = 3, 10, 6
 
         p.setPen(Qt.PenStyle.NoPen)
@@ -216,8 +167,8 @@ class StatPanel(QWidget):
 class DotWindow(QWidget):
     """
     Draggable orb.
-      Ctrl + left-drag   → reposition
-      Ctrl + right-click → open styled on-screen context menu at cursor
+      Ctrl + left-drag   → reposition; fires on_moved after each move
+      Ctrl + right-click → fires on_context_menu at cursor position
     """
 
     ORB_X = 14
@@ -278,11 +229,9 @@ class DotWindow(QWidget):
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
-
         if event.button() == Qt.MouseButton.RightButton and ctrl:
             self._on_context_menu(QCursor.pos())
             return
-
         if event.button() == Qt.MouseButton.LeftButton and ctrl and not self.locked:
             self._drag_pos = (
                 event.globalPosition().toPoint() - self.frameGeometry().topLeft()
@@ -299,171 +248,82 @@ class DotWindow(QWidget):
         self._drag_pos = None
 
 
-# ── Overlay ───────────────────────────────────────────────────────────────────
+# ── Overlay (implements OverlayBase) ──────────────────────────────────────────
 
-class Overlay:
-    """Owns the orb, stat panel, tick timer, and system tray."""
+class Overlay(OverlayBase):
+    """
+    Default D2R Counter overlay style.
+
+    Composed of a draggable orb (DotWindow) and a stat panel (StatPanel).
+    The manager owns the timer tick — this class does not start its own.
+    """
 
     def __init__(
         self,
         x: int = OVERLAY_X,
         y: int = OVERLAY_Y,
-        on_hint_dismissed: Optional[Callable] = None,
-        show_hint_on_start: bool = False
+        on_context_menu: Optional[Callable[[QPoint], None]] = None,
+        on_moved: Optional[Callable] = None,
     ) -> None:
-       
-        self.app    = _app  # exposed so detector can connect aboutToQuit
-        self._locked = False
-        self._hint_dismissed_cb = on_hint_dismissed
-        self._hint_window: Optional[HintWindow] = None
-
         self._panel = StatPanel(0, 0)
-        self._dot   = DotWindow(x, y, self._panel, self._show_context_menu, self._sync_hint_window)
+        self._dot   = DotWindow(
+            x, y,
+            self._panel,
+            on_context_menu or (lambda pos: None),
+            on_moved,
+        )
         self._panel.move(x + 46, y - 22)
         self._dot.raise_()
 
-        self._timer = QTimer()
-        self._timer.setInterval(50)
-        self._timer.timeout.connect(self._panel.tick)
-        self._timer.start()
+    # ── OverlayBase interface ─────────────────────────────────────────────────
 
-        # ── Tray (secondary access, same actions) ─────────────────────────────
-        self._tray = QSystemTrayIcon()
-        self._tray.setIcon(QIcon("off.ico"))
-        self._tray.setToolTip("D2R Session Tracker  |  Ctrl+right-click orb for options")
-        self._tray.setContextMenu(self._build_tray_menu())
-        self._tray.show()
-
-        signals.joined.connect(self._on_joined, Qt.ConnectionType.QueuedConnection)
-        signals.left.connect(self._on_left,     Qt.ConnectionType.QueuedConnection)
-
-        if show_hint_on_start:
-            QTimer.singleShot(0, self._show_hint)
-
-    def run(self) -> None:
-        _app.setStyle("Fusion")
-        _app.exec()
-
-    # ── On-screen context menu ────────────────────────────────────────────────
-
-    def _show_context_menu(self, pos: QPoint) -> None:
-        self._build_context_menu().exec(pos)
-
-    def _build_context_menu(self) -> QMenu:
-        """
-        Styled on-screen menu. Rebuilt on every call so labels always
-        reflect current state (visible/hidden, locked/unlocked).
-        """
-        menu = QMenu()
-        menu.setStyleSheet(_MENU_QSS)
-        menu.setWindowFlags(
-            menu.windowFlags() | Qt.WindowType.NoDropShadowWindowHint
-        )
-
-        # ── Non-interactive header ────────────────────────────────────────────
-        header = QAction(_MENU_HEADER, menu)
-        header.setEnabled(False)
-        f_hdr = QFont("Segoe UI", 7)
-        f_hdr.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 2.8)
-        header.setFont(f_hdr)
-        menu.addAction(header)
-        menu.addSeparator()
-
-        # ── Windows ───────────────────────────────────────────────────────────
-        menu.addAction("Stats",  self._show_stats)
-        menu.addAction("Help",   self._show_hint)
-        menu.addSeparator()
-
-        # ── Overlay controls ──────────────────────────────────────────────────
-        vis_lbl = "Hide overlay" if self._dot.isVisible() else "Show overlay"
-        menu.addAction(vis_lbl, self._toggle_visibility)
-
-        lock_lbl = "Unlock position" if self._locked else "Lock position"
-        menu.addAction(lock_lbl, self._toggle_lock)
-
-        menu.addAction("Reset session", self._reset_session)
-        menu.addSeparator()
-
-        # ── Quit ─────────────────────────────────────────────────────────────
-        quit_act = QAction("Quit", menu)
-        f_quit = QFont("Segoe UI", 9)
-        quit_act.setFont(f_quit)
-        quit_act.triggered.connect(_app.quit)
-        menu.addAction(quit_act)
-
-        return menu
-
-    # ── Tray menu (minimal mirror) ────────────────────────────────────────────
-
-    def _build_tray_menu(self) -> QMenu:
-        menu = QMenu()
-        menu.addAction("Stats",         self._show_stats)
-        menu.addAction("Help",          self._show_hint)
-        menu.addSeparator()
-        menu.addAction("Show / Hide",   self._toggle_visibility)
-        menu.addAction("Lock position", self._toggle_lock)
-        menu.addAction("Reset session", self._reset_session)
-        menu.addSeparator()
-        menu.addAction("Quit",          _app.quit)
-        return menu
-
-    # ── Signal handlers ───────────────────────────────────────────────────────
-
-    def _on_joined(self) -> None:
+    def on_joined(self) -> None:
         self._dot.in_game = True
         self._panel.on_joined()
         self._dot.update()
 
-    def _on_left(self) -> None:
+    def on_left(self) -> None:
         self._dot.in_game = False
         self._panel.on_left()
         self._dot.update()
 
-    # ── Actions ───────────────────────────────────────────────────────────────
+    def tick(self) -> None:
+        self._panel.tick()
 
-    def _toggle_visibility(self) -> None:
-        vis = self._dot.isVisible()
-        self._dot.setVisible(not vis)
-        self._panel.setVisible(not vis)
+    def get_position(self) -> QPoint:
+        return QPoint(self._dot.x(), self._dot.y())
 
-    def _toggle_lock(self) -> None:
-        self._locked     = not self._locked
-        self._dot.locked = self._locked
+    def move_to(self, pos: QPoint) -> None:
+        self._dot.move(pos)
+        self._panel.move(pos.x() + 46, pos.y() - 22)
 
-    def _reset_session(self) -> None:
-        """Resets display counter only — all-time stats are never touched."""
-        self._panel.game_count  = 0
+    def set_game_count(self, count: int) -> None:
+        self._panel.game_count  = count
         self._panel._game_start = None
         self._panel.in_game     = False
         self._dot.in_game       = False
         self._panel.update()
         self._dot.update()
 
-    def _show_stats(self) -> None:
-        """Placeholder — wired up when stats_window.py is implemented."""
-        pass
+    def get_game_count(self) -> int:
+        return self._panel.game_count
 
-    def show_hint(self) -> None:
-        """Public — called from main() on first launch."""
-        QTimer.singleShot(0, self._show_hint)
-        self._show_hint()
+    def set_locked(self, locked: bool) -> None:
+        self._dot.locked = locked
 
-    def _show_hint(self) -> None:
-        """Open the hint window above the orb. If already open, bring it to front."""
-        if self._hint_window and self._hint_window.isVisible():
-            self._hint_window.raise_()
-            self._hint_window.activateWindow()
-            return
-        # Anchor = top-left of dot window so hint left edge aligns with overlay left edge
-        anchor = QPoint(self._dot.x(), self._dot.y())
-        self._hint_window = HintWindow(on_dismiss=self._on_hint_dismissed, anchor=anchor)
-        self._hint_window.show()
+    def show(self) -> None:
+        self._dot.show()
+        self._panel.show()
 
-    def _sync_hint_window(self) -> None:
-        """Called on every orb drag tick — keeps hint pinned above the overlay."""
-        if self._hint_window and self._hint_window.isVisible():
-            self._hint_window.reposition(QPoint(self._dot.x(), self._dot.y()))
+    def hide(self) -> None:
+        self._dot.hide()
+        self._panel.hide()
 
-    def _on_hint_dismissed(self) -> None:
-        if self._hint_dismissed_cb:
-            self._hint_dismissed_cb()
+    def is_visible(self) -> bool:
+        return self._dot.isVisible()
+
+    def destroy(self) -> None:
+        self._panel.close()
+        self._dot.close()
+        self._panel.deleteLater()
+        self._dot.deleteLater()

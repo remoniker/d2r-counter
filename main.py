@@ -62,7 +62,7 @@ if ENABLE_RUN_LOG:
 else:
     runLog.disabled = True
 
-# ── Imports ───────────────────────────────────────────────────────────────────
+# ── Third-party imports ───────────────────────────────────────────────────────
 
 try:
     from scapy.all import sniff, IP, TCP
@@ -75,7 +75,8 @@ except ImportError:
     sys.exit("ERROR: psutil not installed.  Run:  pip install psutil")
 
 try:
-    from overlay import QApplication, Overlay, signals
+    from overlay_manager import OverlayManager
+    from overlay_signals import signals
 except ImportError:
     sys.exit("ERROR: PyQt6 not installed.  Run:  pip install PyQt6")
 
@@ -90,7 +91,7 @@ STATS_FILE        = "stats.json"
 
 EARLY_LARGE_PKT    = 4000    # single inbound packet must exceed this for early_large
 EARLY_LARGE_WINDOW = 0.8     # large packet must arrive within this many seconds of SYN-ACK
-EARLY_LARGE_MIN    = 10_000  # total inbound bytes required alongside an early large packet
+EARLY_LARGE_MIN    = 15_000  # total inbound bytes required alongside an early large packet
 EARLY_LARGE_BURST  = 8_000   # peak_burst required alongside an early large packet
 RAPID_BURST_BYTES  = 10_000  # peak inbound bytes within RAPID_BURST_WINDOW triggers join
 RAPID_BURST_WINDOW = 0.75    # seconds — sliding window for burst check
@@ -99,7 +100,7 @@ RAPID_BURST_WINDOW = 0.75    # seconds — sliding window for burst check
 
 GAME_MIN_INBOUND_RATIO = 0.80
 GAME_MIN_CONSEC_LARGE  = 2
-GAME_MIN_MTU_PACKETS   = 1
+GAME_MIN_MTU_PACKETS   = 2
 
 # ── Detection thresholds — outbound hard disqualifiers ───────────────────────
 
@@ -111,7 +112,7 @@ GAME_MIN_OUTBOUND_SAMPLE = 3
 
 CONSEC_FAST_CERTAIN = 12
 
-# ── Early abandon threshold — games left within this many seconds ─────────────
+# ── Early abandon threshold ───────────────────────────────────────────────────
 
 EARLY_ABANDON_SECONDS = 60
 
@@ -154,9 +155,9 @@ def port_belongs_to_d2r(local_port: int, d2r_pid: int) -> bool:
         pass
     return False
 
-# ── Log Output ────────────────────────────────────────────────────────────────
+# ── Log output ────────────────────────────────────────────────────────────────
 
-def log_started():
+def log_started() -> None:
     line = "*" * 20 + " APPLICATION STARTED " + "*" * 20
     runLog.info(line)
     packetLog.info(line)
@@ -179,7 +180,7 @@ def packetlog_inbound_data(byte_count, conn, pkts, consec_fast, last_gap, server
         + (f"  DISQ=[{disq}]" if disq else "")
     )
 
-def packetlog_game_joined(c_ref):
+def packetlog_game_joined(c_ref) -> None:
     packetLog.info(
         f"JOINED  {c_ref.server_ip}:{c_ref.server_port}  "
         f"total={c_ref.inbound_bytes}b  "
@@ -196,13 +197,13 @@ def packetlog_game_joined(c_ref):
         f"pkt_sizes={[s for _, s in c_ref.packets]}"
     )
 
-def runlog_game_joined(c_ref, game_count):
+def runlog_game_joined(c_ref, game_count) -> None:
     runLog.info(
         f"GAME JOINED  #{game_count}  "
         f"server={c_ref.server_ip}:{c_ref.server_port}  "
     )
 
-# ── Console Output ────────────────────────────────────────────────────────────
+# ── Console output ────────────────────────────────────────────────────────────
 
 def cmd_msg_started() -> None:
     print("=" * 60)
@@ -218,7 +219,7 @@ def cmd_msg_started() -> None:
     print(f"  Max outbound single: {GAME_MAX_OUTBOUND_SINGLE}b")
     print(f"  Max outbound avg   : {GAME_MAX_OUTBOUND_AVG}b (>={GAME_MIN_OUTBOUND_SAMPLE} pkts)")
     print(f"  Expiry window      : {DATA_BURST_WINDOW}s")
-    print("  Ctrl+drag dot to reposition. Right-click tray for options.")
+    print("  Ctrl+drag orb to reposition. Ctrl+right-click for options.")
     print("=" * 60)
     stats.print_summary()
     print()
@@ -251,7 +252,7 @@ _STATS_DEFAULT = {
         "longest_game_seconds":  0,
         "first_game_at":         None,
         "last_game_at":          None,
-        "unique_servers":        [],   # list of "ip:port" strings
+        "unique_servers":        [],
     },
     "last_run": {
         "started_at":   None,
@@ -261,12 +262,11 @@ _STATS_DEFAULT = {
         "crashed":      False,
     },
     "prefs": {
-        "hint_shown": False,   # set True after user dismisses the hint window
+        "hint_shown": False,
     },
 }
 
 def _fmt_duration(seconds: int) -> str:
-    """Return a compact human-readable duration string."""
     if seconds < 60:
         return f"{seconds}s"
     h, rem = divmod(seconds, 3600)
@@ -279,18 +279,13 @@ def _fmt_duration(seconds: int) -> str:
 class StatsManager:
     """
     Lightweight all-time stat tracker backed by a single JSON file.
-
-    All public methods are thread-safe. The file is written immediately
-    after every meaningful event — since events are infrequent (game
-    join/leave, session start/end) this has no performance impact.
+    All public methods are thread-safe.
+    File is written atomically via a temp file on every meaningful event.
 
     Separation of concerns
     ──────────────────────
-    session.game_count  →  display counter only; user may set it freely
-    StatsManager        →  counts real join events; never reads game_count
-
-    A manual override of the overlay counter therefore has zero effect on
-    any stat tracked here.
+    overlay display counter  →  user-adjustable, purely cosmetic
+    StatsManager             →  counts real join events; never reads the display counter
     """
 
     def __init__(self, path: str = STATS_FILE) -> None:
@@ -306,7 +301,7 @@ class StatsManager:
             try:
                 with open(self._path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                # Back-fill any keys added in later versions
+                import copy
                 for section, defaults in _STATS_DEFAULT.items():
                     data.setdefault(section, {})
                     for k, v in defaults.items():
@@ -318,7 +313,6 @@ class StatsManager:
         return copy.deepcopy(_STATS_DEFAULT)
 
     def _save(self) -> None:
-        """Write atomically via a temp file so a crash never corrupts the file."""
         tmp = self._path + ".tmp"
         try:
             with open(tmp, "w", encoding="utf-8") as f:
@@ -327,14 +321,9 @@ class StatsManager:
         except OSError as e:
             runLog.error(f"Failed to save stats: {e}")
 
-    # ── Public event hooks ────────────────────────────────────────────────────
+    # ── Event hooks ───────────────────────────────────────────────────────────
 
     def on_session_start(self) -> None:
-        """
-        Call once from main() before any other work.
-        Detects a previous crash (started_at set but ended_at missing),
-        bumps total_sessions, and writes the last_run header.
-        """
         with self._lock:
             at = self._data["alltime"]
             lr = self._data["last_run"]
@@ -360,8 +349,7 @@ class StatsManager:
             self._save()
 
     def on_game_joined(self, server_ip: str, server_port: int) -> None:
-        """Call immediately after a connection is promoted to IN_GAME."""
-        now = fmt_time()
+        now        = fmt_time()
         server_key = f"{server_ip}:{server_port}"
         with self._lock:
             at = self._data["alltime"]
@@ -380,7 +368,6 @@ class StatsManager:
             self._save()
 
     def on_game_left(self, duration_seconds: int) -> None:
-        """Call when the active game connection closes. Pass measured duration."""
         with self._lock:
             at = self._data["alltime"]
             lr = self._data["last_run"]
@@ -391,23 +378,17 @@ class StatsManager:
             if duration_seconds > at["longest_game_seconds"]:
                 at["longest_game_seconds"] = duration_seconds
 
-            # Check if this session set a new most-games record
             if lr["games"] > at["most_games_in_session"]:
                 at["most_games_in_session"] = lr["games"]
 
             self._save()
 
     def on_session_end(self) -> None:
-        """
-        Call on clean exit (Qt aboutToQuit signal).
-        Records total app uptime and marks last_run as cleanly ended.
-        """
         elapsed = int(time.monotonic() - self._app_start)
         with self._lock:
             self._data["alltime"]["total_app_seconds"] += elapsed
             self._data["last_run"]["ended_at"]          = fmt_time()
 
-            # Final session game count may set a new record
             lr = self._data["last_run"]
             at = self._data["alltime"]
             if lr["games"] > at["most_games_in_session"]:
@@ -415,7 +396,7 @@ class StatsManager:
 
             self._save()
 
-    # ── Read helpers (no lock needed — called from same thread or with snapshot) ──
+    # ── Read helpers ──────────────────────────────────────────────────────────
 
     def avg_game_duration(self) -> float:
         at = self._data["alltime"]
@@ -438,8 +419,8 @@ class StatsManager:
     # ── Console summary ───────────────────────────────────────────────────────
 
     def print_summary(self) -> None:
-        at = self._data["alltime"]
-        lr = self._data["last_run"]
+        at  = self._data["alltime"]
+        lr  = self._data["last_run"]
         avg = self.avg_game_duration()
 
         print("  ── All-time stats ──────────────────────────────────────")
@@ -480,12 +461,9 @@ class Conn:
     local_port:  int
     syn_ack_at:  float = field(default_factory=time.monotonic)
 
-    # Inbound — server → client
-    inbound_bytes:   int                    = 0
-    _inbound_pkts:   list[tuple[float,int]] = field(default_factory=list)
-
-    # Outbound — client → server (tracked after SYN-ACK)
-    _outbound_pkts:  list[tuple[float,int]] = field(default_factory=list)
+    inbound_bytes:  int                    = 0
+    _inbound_pkts:  list[tuple[float,int]] = field(default_factory=list)
+    _outbound_pkts: list[tuple[float,int]] = field(default_factory=list)
 
     def key(self) -> tuple:
         return (self.server_ip, self.server_port, self.local_port)
@@ -493,7 +471,7 @@ class Conn:
     def age(self) -> float:
         return time.monotonic() - self.syn_ack_at
 
-    # ── Inbound helpers ───────────────────────────────────────────────────────
+    # ── Inbound ───────────────────────────────────────────────────────────────
 
     def add_inbound(self, size: int) -> None:
         self._inbound_pkts.append((time.monotonic(), size))
@@ -507,7 +485,7 @@ class Conn:
         if not self._inbound_pkts:
             return 0
         best = running = 0
-        j = 0
+        j    = 0
         times = [t for t, _ in self._inbound_pkts]
         sizes = [s for _, s in self._inbound_pkts]
         for i in range(len(self._inbound_pkts)):
@@ -547,7 +525,7 @@ class Conn:
                 current = 1
         return best
 
-    # ── Outbound helpers ──────────────────────────────────────────────────────
+    # ── Outbound ──────────────────────────────────────────────────────────────
 
     def add_outbound(self, size: int) -> None:
         self._outbound_pkts.append((time.monotonic(), size))
@@ -571,16 +549,17 @@ class Conn:
         total = self.inbound_bytes + self.outbound_total()
         return self.inbound_bytes / total if total > 0 else 0.0
 
-    # ── Primary classifier ────────────────────────────────────────────────────
+    # ── Classifier ────────────────────────────────────────────────────────────
 
     def disqualified_reason(self) -> Optional[str]:
-        # ── Axis 1: inbound ratio ─────────────────────────────────────────────
+        # Axis 1: inbound ratio
         ratio = self.inbound_ratio()
         if ratio < GAME_MIN_INBOUND_RATIO:
             return (f"inbound_ratio={ratio:.2f} < {GAME_MIN_INBOUND_RATIO} "
-                    f"(client sent {self.outbound_total()}b / {self.inbound_bytes + self.outbound_total()}b total)")
+                    f"(client sent {self.outbound_total()}b / "
+                    f"{self.inbound_bytes + self.outbound_total()}b total)")
 
-        # ── Axis 2: inbound shape ─────────────────────────────────────────────
+        # Axis 2: inbound shape
         consec_large = self.consecutive_large_streak(threshold=1000)
         if consec_large < GAME_MIN_CONSEC_LARGE:
             consec_fast = self.max_consecutive_fast_inbound()
@@ -595,20 +574,20 @@ class Conn:
                 return (f"mtu_pkts={mtu_pkts} < {GAME_MIN_MTU_PACKETS} "
                         f"and consec_fast={consec_fast} < {CONSEC_FAST_CERTAIN}")
 
-        # ── Axis 3: outbound shape ────────────────────────────────────────────
+        # Axis 3: outbound shape
         max_out = self.max_outbound_packet()
         if max_out > GAME_MAX_OUTBOUND_SINGLE:
             return (f"max_outbound_pkt={max_out}b > {GAME_MAX_OUTBOUND_SINGLE}b "
-                    f"(client sent a large packet — likely credential/token exchange)")
+                    f"(likely credential/token exchange)")
 
         if self.outbound_count() >= GAME_MIN_OUTBOUND_SAMPLE:
             avg_out = self.avg_outbound_size()
             if avg_out > GAME_MAX_OUTBOUND_AVG:
                 return (f"avg_outbound={avg_out:.0f}b > {GAME_MAX_OUTBOUND_AVG}b "
                         f"over {self.outbound_count()} packets "
-                        f"(client sending large messages — likely auth)")
+                        f"(likely auth)")
 
-        return None  # passes all guards
+        return None
 
     def is_game_like(self) -> bool:
         if self.disqualified_reason() is not None:
@@ -646,7 +625,7 @@ class Session:
         self.join_time:      Optional[datetime.datetime] = None
         self.game_server:    Optional[tuple]             = None
         self.d2r_pid:        Optional[int]               = None
-        self.game_count:     int                         = 0   # display counter — user-adjustable
+        self.game_count:     int                         = 0
         self.bnet_connected: bool                        = False
 
     # ── PID tracking ──────────────────────────────────────────────────────────
@@ -661,7 +640,7 @@ class Session:
 
         if pid is None:
             with self.lock:
-                self.d2r_pid        = pid
+                self.d2r_pid        = None
                 self.bnet_connected = False
             runLog.info(f"D2R CLOSED  (was PID {prev_pid})")
             print(f"[{fmt_time()}] ⚠  {PROCESS_NAME} not found — waiting ...")
@@ -793,8 +772,10 @@ class Session:
 
             duration = ""
             if self.join_time:
-                duration_sec = int((datetime.datetime.now() - self.join_time).total_seconds())
-                duration     = f"  (duration: {duration_sec // 60}m {duration_sec % 60}s)"
+                duration_sec = int(
+                    (datetime.datetime.now() - self.join_time).total_seconds()
+                )
+                duration = f"  (duration: {duration_sec // 60}m {duration_sec % 60}s)"
             server           = f"{server_ip}:{server_port}"
             game_num         = self.game_count
             self.state       = State.IDLE
@@ -804,10 +785,13 @@ class Session:
             left             = True
 
         if left:
-            early = duration_sec < EARLY_ABANDON_SECONDS and duration_sec > 0
+            early     = 0 < duration_sec < EARLY_ABANDON_SECONDS
             early_tag = "  [early abandon]" if early else ""
             packetLog.info(f"LEFT  {server}{duration}{early_tag}")
-            runLog.info(f"GAME LEFT    #{game_num}  server={server}  {duration.strip()}{early_tag}")
+            runLog.info(
+                f"GAME LEFT    #{game_num}  server={server}  "
+                f"{duration.strip()}{early_tag}"
+            )
             print(f"\n[{fmt_time()}] ■  LEFT game{duration}{early_tag}")
             print(f"            Server was : {server}")
             stats.on_game_left(duration_sec)
@@ -832,7 +816,7 @@ class Session:
                     self.bnet_connected  = True
                     newly_confirmed_bnet = True
 
-                disq = c.disqualified_reason()
+                disq       = c.disqualified_reason()
                 reason_str = disq if disq else "did not meet burst threshold"
 
                 packetLog.warning(
@@ -887,7 +871,7 @@ def handle_packet(pkt) -> None:
     ip_header_len  = pkt[IP].ihl * 4
     payload_len    = length - ip_header_len - tcp_header_len
 
-    # ── Inbound: server → client ──────────────────────────────────────────────
+    # Inbound: server → client
     if src_port == GAME_SERVER_PORT and dst_ip == LOCAL_IP and is_external(src_ip):
         if syn and ack and not fin:
             session.on_syn_ack(src_ip, src_port, dst_port)
@@ -896,7 +880,7 @@ def handle_packet(pkt) -> None:
             session.on_inbound_data(src_ip, src_port, dst_port, payload_len)
             return
 
-    # ── Outbound: client → server ─────────────────────────────────────────────
+    # Outbound: client → server
     if dst_port == GAME_SERVER_PORT and src_ip == LOCAL_IP and is_external(dst_ip):
         if fin and ack and not syn:
             session.on_outbound_fin(dst_ip, dst_port, src_port)
@@ -920,13 +904,17 @@ def pid_watch_loop() -> None:
 def sniffer_loop(bpf: str) -> None:
     sniff(filter=bpf, prn=handle_packet, store=False, iface=None)
 
-def set_bpf(LOCAL_IP) -> str:
-    return f"tcp port {GAME_SERVER_PORT} and (src host {LOCAL_IP} or dst host {LOCAL_IP})"
+def set_bpf(ip: str) -> str:
+    return (
+        f"tcp port {GAME_SERVER_PORT} "
+        f"and (src host {ip} or dst host {ip})"
+    )
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
     log_started()
+
     global LOCAL_IP
     if LOCAL_IP is None:
         LOCAL_IP = get_local_ip()
@@ -941,14 +929,28 @@ def main() -> None:
     threading.Thread(target=pid_watch_loop,           daemon=True).start()
     threading.Thread(target=sniffer_loop, args=(bpf,), daemon=True).start()
 
-    overlay = Overlay(
-        on_hint_dismissed=stats.mark_hint_shown,
-        show_hint_on_start=True,
-        )
-    overlay.app.aboutToQuit.connect(stats.on_session_end)
-    if not stats.hint_shown:
-        overlay.show_hint()
-    overlay.run()
+    def _on_quit() -> None:
+        """
+        Capture in-game duration on clean exit so it isn't lost.
+        Runs in the Qt thread via aboutToQuit.
+        """
+        with session.lock:
+            active_secs = 0
+            if session.state == State.IN_GAME and session.join_time:
+                active_secs = int(
+                    (datetime.datetime.now() - session.join_time).total_seconds()
+                )
+        if active_secs:
+            stats.on_game_left(active_secs)
+        stats.on_session_end()
+
+    manager = OverlayManager(
+        on_hint_dismissed  = stats.mark_hint_shown,
+        show_hint_on_start = True,
+        # show_hint_on_start = not stats.hint_shown,
+    )
+    manager.app.aboutToQuit.connect(_on_quit)
+    manager.run()
 
 
 if __name__ == "__main__":

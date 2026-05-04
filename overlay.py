@@ -67,9 +67,9 @@ def _fmt_game_time(centiseconds: int) -> str:
 # ── Misc Positioning & Sizing ─────────────────────────────────────────────────
 
 # use to alter relative position of orb on the stat panel
-STAT_PANEL_Y_OFFSET = -17
-DOT_X_OFFSET = 205
-DOT_SIZE = 12
+STAT_PANEL_Y_OFFSET = -18
+DOT_X_OFFSET = 204
+DOT_SIZE = 10
 
 # STAT_PANEL_Y_OFFSET = 10
 # DOT_X_OFFSET = 180
@@ -122,7 +122,7 @@ class StatPanel(QWidget):
 
         accent      = _ACTIVE_ACCENT if self.in_game else _IDLE_ACCENT
         W, H        = self.W, self.H
-        BAR, PAD, R = 3, 10, 6
+        BAR, PAD, R = 3, 10, 15
 
         # background box
         p.setPen(Qt.PenStyle.NoPen)

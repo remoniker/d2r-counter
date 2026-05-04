@@ -114,7 +114,8 @@ class OverlayManager:
 
         self._on_hint_dismissed_cb = on_hint_dismissed
         self._hint_window  = None
-        # self._stats_window = None  # wire up when stats_window.py is built
+        self._stats_window = None  # wire up when stats_window.py is built
+        self._about_window = None  # wire up when about_window.py is built
 
         self._locked       = False
         self._visible      = True
@@ -237,21 +238,22 @@ class OverlayManager:
         menu.addSeparator()
 
         # Windows
-        menu.addAction("Stats", self._show_stats)
-        menu.addAction("Help",  self._show_hint)
+        menu.addAction("Hint",  self._show_hint)
+        menu.addAction("About", self._show_about)
+        menu.addAction("Statistics", self._show_stats)
         menu.addSeparator()
 
         # Style switcher submenu (only shown when more than one style exists)
-        style_menu = QMenu("Style", menu)
-        style_menu.setStyleSheet(_MENU_QSS)
-        for name in self._styles:
-            act = QAction(name, style_menu)
-            act.setCheckable(True)
-            act.setChecked(name == self._active_style)
-            act.triggered.connect(lambda checked, n=name: self.switch_style(n))
-            style_menu.addAction(act)
-        menu.addMenu(style_menu)
-        menu.addSeparator()
+        # style_menu = QMenu("Style", menu)
+        # style_menu.setStyleSheet(_MENU_QSS)
+        # for name in self._styles:
+        #     act = QAction(name, style_menu)
+        #     act.setCheckable(True)
+        #     act.setChecked(name == self._active_style)
+        #     act.triggered.connect(lambda checked, n=name: self.switch_style(n))
+        #     style_menu.addAction(act)
+        # menu.addMenu(style_menu)
+        # menu.addSeparator()
 
         # Overlay controls
         vis_lbl  = "Hide overlay"     if self._visible else "Show overlay"
@@ -273,21 +275,27 @@ class OverlayManager:
         menu = QMenu()
         menu.addAction("Stats",         self._show_stats)
         menu.addAction("Help",          self._show_hint)
+        menu.addAction("About",         self._show_about)
         menu.addSeparator()
         menu.addAction("Show / Hide",   self._toggle_visibility)
         menu.addAction("Lock position", self._toggle_lock)
         menu.addAction("Reset session", self._reset_session)
         menu.addSeparator()
-        for name in self._styles:
-            menu.addAction(
-                f"Style: {name}",
-                lambda n=name: self.switch_style(n)
-            )
+
         menu.addSeparator()
         menu.addAction("Quit", _app.quit)
         return menu
 
     # ── Actions ───────────────────────────────────────────────────────────────
+
+    def _show_about(self) -> None:
+        from about_window import AboutWindow
+        if self._about_window and self._about_window.isVisible():
+            self._about_window.raise_()
+            self._about_window.activateWindow()
+            return
+        self._about_window = AboutWindow()
+        self._about_window.show()
 
     def _toggle_visibility(self) -> None:
         if self._visible:
@@ -330,4 +338,10 @@ class OverlayManager:
     # ── Stats window ──────────────────────────────────────────────────────────
 
     def _show_stats(self) -> None:
-        pass  # wire up when stats_window.py is built
+        from stats import StatsWindow
+        if self._stats_window and self._stats_window.isVisible():
+            self._stats_window.raise_()
+            self._stats_window.activateWindow()
+            return
+        self._stats_window = StatsWindow()
+        self._stats_window.show()

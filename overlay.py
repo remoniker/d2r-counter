@@ -25,8 +25,6 @@ try:
 except ImportError:
     raise
 
-from overlay_signals import signals
-from overlay_base import OverlayBase
 
 _app = QApplication.instance() or QApplication(sys.argv)
 screen = QApplication.primaryScreen().geometry()
@@ -286,9 +284,9 @@ class DotWindow(QWidget):
         self.raise_()
 
 
-# ── Overlay (implements OverlayBase) ──────────────────────────────────────────
+# ── Overlay ───────────────────────────────────────────────────────────────────
 
-class Overlay(OverlayBase):
+class Overlay:
     """
     Default D2R Counter overlay style.
 

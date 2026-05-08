@@ -24,11 +24,15 @@ import sys
 from typing import Optional, Callable
 
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
-from PyQt6.QtCore import Qt, QTimer, QPoint
+from PyQt6.QtCore import Qt, QTimer, QPoint, QObject, pyqtSignal
 from PyQt6.QtGui import QIcon, QAction, QFont, QCursor
 
-from overlay_signals import signals
-from overlay_base import OverlayBase
+
+class _GameSignals(QObject):
+    joined = pyqtSignal()
+    left   = pyqtSignal()
+
+signals = _GameSignals()
 
 _app = QApplication.instance() or QApplication(sys.argv)
 
@@ -86,10 +90,8 @@ def _get_styles() -> dict[str, type]:
     from overlay import Overlay as StyleDefault
     # from overlay_pill  import OverlayPill  as StylePill
     # from overlay_ghost import OverlayGhost as StyleGhost
-    from overlay_circle import OverlayCircle as StyleCircle
     return {
         "Default": StyleDefault,
-        "Circle":  StyleCircle,
         # "Pill":  StylePill,
         # "Ghost": StyleGhost,
     }
@@ -115,7 +117,7 @@ class OverlayManager:
         self._on_hint_dismissed_cb = on_hint_dismissed
         self._hint_window  = None
         self._stats_window = None  # wire up when stats_window.py is built
-        self._about_window = None  # wire up when about_window.py is built
+        self._about_window = None
 
         self._locked       = False
         self._visible      = True
@@ -123,7 +125,7 @@ class OverlayManager:
         self._styles       = _get_styles()
 
         # ── Start with the default overlay ────────────────────────────────────
-        self._overlay: OverlayBase = self._instantiate(DEFAULT_STYLE)
+        self._overlay = self._instantiate(DEFAULT_STYLE)
 
         # ── 50 ms tick — forwarded to whatever overlay is active ──────────────
         self._timer = QTimer()
@@ -182,7 +184,7 @@ class OverlayManager:
         # Rebuild tray menu so the style checkmark updates
         self._tray.setContextMenu(self._build_tray_menu())
 
-    def _instantiate(self, name: str, pos: Optional[QPoint] = None) -> OverlayBase:
+    def _instantiate(self, name: str, pos: Optional[QPoint] = None):
         """
         Create a fresh overlay of style `name` at `pos`.
         Passes the manager's callbacks so the overlay can trigger the
@@ -243,18 +245,6 @@ class OverlayManager:
         menu.addAction("Statistics", self._show_stats)
         menu.addSeparator()
 
-        # Style switcher submenu (only shown when more than one style exists)
-        # style_menu = QMenu("Style", menu)
-        # style_menu.setStyleSheet(_MENU_QSS)
-        # for name in self._styles:
-        #     act = QAction(name, style_menu)
-        #     act.setCheckable(True)
-        #     act.setChecked(name == self._active_style)
-        #     act.triggered.connect(lambda checked, n=name: self.switch_style(n))
-        #     style_menu.addAction(act)
-        # menu.addMenu(style_menu)
-        # menu.addSeparator()
-
         # Overlay controls
         vis_lbl  = "Hide overlay"     if self._visible else "Show overlay"
         lock_lbl = "Unlock position"  if self._locked  else "Lock position"
@@ -289,7 +279,7 @@ class OverlayManager:
     # ── Actions ───────────────────────────────────────────────────────────────
 
     def _show_about(self) -> None:
-        from about_window import AboutWindow
+        from about import AboutWindow
         if self._about_window and self._about_window.isVisible():
             self._about_window.raise_()
             self._about_window.activateWindow()
@@ -345,3 +335,4 @@ class OverlayManager:
             return
         self._stats_window = StatsWindow()
         self._stats_window.show()
+

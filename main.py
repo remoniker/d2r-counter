@@ -75,8 +75,7 @@ except ImportError:
     sys.exit("ERROR: psutil not installed.  Run:  pip install psutil")
 
 try:
-    from overlay_manager import OverlayManager
-    from overlay_signals import signals
+    from overlay_manager import OverlayManager, signals
 except ImportError:
     sys.exit("ERROR: PyQt6 not installed.  Run:  pip install PyQt6")
 

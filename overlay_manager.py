@@ -13,8 +13,8 @@ The manager swaps styles at runtime, preserving position and game state.
 
 Usage in main():
     manager = OverlayManager(
-        on_hint_dismissed  = stats.mark_hint_shown,
-        show_hint_on_start = not stats.hint_shown,
+        on_hint_dismissed  = config.mark_hint_shown,
+        show_hint_on_start = not config.hint_shown,
     )
     manager.app.aboutToQuit.connect(stats.on_session_end)
     manager.run()
@@ -23,9 +23,11 @@ Usage in main():
 import sys
 from typing import Optional, Callable
 
-from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
+from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QDialog, QSpinBox, QPushButton, QLabel
 from PyQt6.QtCore import Qt, QTimer, QPoint, QObject, pyqtSignal
-from PyQt6.QtGui import QIcon, QAction, QFont, QCursor
+from PyQt6.QtGui import QIcon, QAction, QFont, QCursor, QPainter, QPen, QMouseEvent
+
+from theme import GOLD, BG, DIVIDER, MENU_QSS, SPINBOX_QSS, DIALOG_BTN_QSS, DIALOG_FLAGS, POPUP_FLAGS
 
 
 class _GameSignals(QObject):
@@ -36,67 +38,106 @@ signals = _GameSignals()
 
 _app = QApplication.instance() or QApplication(sys.argv)
 
-# ── Context menu stylesheet ───────────────────────────────────────────────────
-
-_MENU_QSS = """
-QMenu {
-    background-color: rgb(14, 14, 14);
-    border: 1px solid rgb(48, 48, 48);
-    border-radius: 8px;
-    padding: 5px 0px;
-    font-family: "Segoe UI";
-    font-size: 9pt;
-    color: rgb(210, 210, 210);
-}
-QMenu::item {
-    padding: 6px 24px 6px 14px;
-    margin: 1px 5px;
-    border-radius: 4px;
-    border-left: 3px solid transparent;
-}
-QMenu::item:selected {
-    background-color: rgba(56, 124, 188, 35);
-    border-left: 3px solid #387CBC;
-    color: rgb(255, 255, 255);
-}
-QMenu::item:pressed  { background-color: rgba(56, 124, 188, 60); }
-QMenu::item:disabled {
-    color: rgb(58, 58, 58);
-    border-left: 3px solid transparent;
-    background: transparent;
-}
-QMenu::separator {
-    height: 1px;
-    background-color: rgb(38, 38, 38);
-    margin: 4px 10px;
-}
-"""
 
 
 
-
-# ── Style registry ────────────────────────────────────────────────────────────
-#
-# Add a new overlay style in two steps:
-#   1. Import the class above this block
-#   2. Add an entry:  "Display Name": ClassName
-#
-# Imports are deferred to avoid a circular import at module level —
-# overlay.py imports OverlayBase from this file, so this file must
-# not import overlay.py at the top level. The registry is populated
-# lazily in _get_styles() the first time it is needed.
 
 def _get_styles() -> dict[str, type]:
-    from overlay import Overlay as StyleDefault
-    # from overlay_pill  import OverlayPill  as StylePill
-    # from overlay_ghost import OverlayGhost as StyleGhost
-    return {
-        "Default": StyleDefault,
-        # "Pill":  StylePill,
-        # "Ghost": StyleGhost,
-    }
+    from overlay import Overlay
+    return {"Default": Overlay}
 
 DEFAULT_STYLE = "Default"
+
+# ── Set-count dialog ──────────────────────────────────────────────────────────
+
+_DW, _DH, _DR = 240, 112, 8
+
+
+class _SetCountDialog(QDialog):
+    def __init__(self, current: int) -> None:
+        super().__init__(None)
+        self._drag_pos: Optional[QPoint] = None
+
+        self.setWindowFlags(DIALOG_FLAGS)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFixedSize(_DW, _DH)
+
+        self._build_ui(current)
+        screen = QApplication.primaryScreen().geometry()
+        self.move(
+            (screen.width()  - _DW) // 2,
+            (screen.height() - _DH) // 2,
+        )
+
+    def _build_ui(self, current: int) -> None:
+        title = QLabel("SET COUNTER", self)
+        title.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        f = QFont("Segoe UI", 8)
+        f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 2.0)
+        title.setFont(f)
+        title.setStyleSheet(f"color: {GOLD.name()}; background: transparent;")
+        title.move(14, 12)
+        title.adjustSize()
+
+        self._spin = QSpinBox(self)
+        self._spin.setRange(0, 99999)
+        self._spin.setValue(current)
+        self._spin.setFixedSize(212, 28)
+        self._spin.move(14, 36)
+        self._spin.setStyleSheet(SPINBOX_QSS)
+
+        ok = QPushButton("OK", self)
+        ok.setFixedSize(100, 26)
+        ok.move(14, 74)
+        ok.setCursor(Qt.CursorShape.PointingHandCursor)
+        ok.setStyleSheet(DIALOG_BTN_QSS)
+        ok.clicked.connect(self.accept)
+
+        cancel = QPushButton("Cancel", self)
+        cancel.setFixedSize(100, 26)
+        cancel.move(126, 74)
+        cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+        cancel.setStyleSheet(DIALOG_BTN_QSS)
+        cancel.clicked.connect(self.reject)
+
+    def get_value(self) -> Optional[int]:
+        if self.exec() == QDialog.DialogCode.Accepted:
+            return self._spin.value()
+        return None
+
+    def paintEvent(self, _) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(BG)
+        p.drawRoundedRect(0, 0, _DW, _DH, _DR, _DR)
+
+        pen = QPen(GOLD)
+        pen.setWidthF(1.0)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(0, 0, _DW - 1, _DH - 1, _DR, _DR)
+
+        div = QPen(DIVIDER)
+        div.setWidthF(0.8)
+        p.setPen(div)
+        p.drawLine(14, 30, _DW - 14, 30)
+
+        p.end()
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = (
+                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            )
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if self._drag_pos and event.buttons() == Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+
+    def mouseReleaseEvent(self, _: QMouseEvent) -> None:
+        self._drag_pos = None
 
 
 # ── OverlayManager ────────────────────────────────────────────────────────────
@@ -109,23 +150,38 @@ class OverlayManager:
 
     def __init__(
         self,
-        on_hint_dismissed:  Optional[Callable] = None,
-        show_hint_on_start: bool = False,
+        on_hint_dismissed:     Optional[Callable]       = None,
+        show_hint_on_start:    bool                     = False,
+        initial_count:         int                      = 0,
+        continue_from_last:    bool                     = False,
+        on_counter_saved:      Optional[Callable[[int], None]]       = None,
+        on_continue_toggled:   Optional[Callable[[bool], None]]      = None,
+        initial_pos:           Optional[tuple[int, int]]             = None,
     ) -> None:
         self.app = _app
 
-        self._on_hint_dismissed_cb = on_hint_dismissed
+        self._on_hint_dismissed_cb  = on_hint_dismissed
+        self._on_counter_saved_cb   = on_counter_saved
+        self._on_continue_toggled_cb = on_continue_toggled
+        self._continue_from_last    = continue_from_last
+
         self._hint_window  = None
-        self._stats_window = None  # wire up when stats_window.py is built
+        self._stats_window = None
         self._about_window = None
 
-        self._locked       = False
         self._visible      = True
         self._active_style = DEFAULT_STYLE
         self._styles       = _get_styles()
 
         # ── Start with the default overlay ────────────────────────────────────
-        self._overlay = self._instantiate(DEFAULT_STYLE)
+        saved_pos = None
+        if initial_pos is not None:
+            p = QPoint(initial_pos[0], initial_pos[1])
+            if _app.primaryScreen().geometry().contains(p):
+                saved_pos = p
+        self._overlay = self._instantiate(DEFAULT_STYLE, pos=saved_pos)
+        if initial_count:
+            self._overlay.set_game_count(initial_count)
 
         # ── 50 ms tick — forwarded to whatever overlay is active ──────────────
         self._timer = QTimer()
@@ -141,8 +197,10 @@ class OverlayManager:
         self._tray.show()
 
         # ── Game signal routing ───────────────────────────────────────────────
-        signals.joined.connect(self._on_joined, Qt.ConnectionType.QueuedConnection)
-        signals.left.connect(self._on_left,     Qt.ConnectionType.QueuedConnection)
+        signals.joined.connect(self._on_joined,          Qt.ConnectionType.QueuedConnection)
+        signals.left.connect(self._on_left,              Qt.ConnectionType.QueuedConnection)
+        signals.joined.connect(self._refresh_stats_window, Qt.ConnectionType.QueuedConnection)
+        signals.left.connect(self._refresh_stats_window,   Qt.ConnectionType.QueuedConnection)
 
         # ── Hint on first launch ──────────────────────────────────────────────
         if show_hint_on_start:
@@ -152,37 +210,15 @@ class OverlayManager:
 
     def run(self) -> None:
         _app.setStyle("Fusion")
+        _app.setQuitOnLastWindowClosed(False)
         _app.exec()
 
     def show_hint(self) -> None:
         self._show_hint()
 
-    # ── Style switching ───────────────────────────────────────────────────────
-
-    def switch_style(self, name: str) -> None:
-        """
-        Swap the active overlay to `name`.
-        Preserves position, game count, lock state, and visibility.
-        """
-        if name == self._active_style or name not in self._styles:
-            return
-
-        pos         = self._overlay.get_position()
-        count       = self._overlay.get_game_count()
-        was_visible = self._overlay.is_visible()
-
-        self._overlay.destroy()
-
-        self._active_style = name
-        self._overlay = self._instantiate(name, pos=pos)
-        self._overlay.set_game_count(count)
-        self._overlay.set_locked(self._locked)
-
-        if not was_visible:
-            self._overlay.hide()
-
-        # Rebuild tray menu so the style checkmark updates
-        self._tray.setContextMenu(self._build_tray_menu())
+    def get_overlay_position(self) -> tuple[int, int]:
+        p = self._overlay.get_position()
+        return (p.x(), p.y())
 
     def _instantiate(self, name: str, pos: Optional[QPoint] = None):
         """
@@ -214,6 +250,8 @@ class OverlayManager:
 
     def _on_left(self) -> None:
         self._overlay.on_left()
+        if self._on_counter_saved_cb:
+            self._on_counter_saved_cb(self._overlay.get_game_count())
 
     # ── Context menu (on-screen, Ctrl+right-click) ────────────────────────────
 
@@ -225,10 +263,9 @@ class OverlayManager:
         Rebuilt on every open so labels always reflect current state.
         """
         menu = QMenu()
-        menu.setStyleSheet(_MENU_QSS)
-        menu.setWindowFlags(
-            menu.windowFlags() | Qt.WindowType.NoDropShadowWindowHint
-        )
+        menu.setWindowFlags(POPUP_FLAGS)
+        menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        menu.setStyleSheet(MENU_QSS)
 
         # Header — non-interactive title
         header = QAction("D2R  COUNTER", menu)
@@ -240,17 +277,23 @@ class OverlayManager:
         menu.addSeparator()
 
         # Windows
-        menu.addAction("Hint",  self._show_hint)
-        menu.addAction("About", self._show_about)
+        menu.addAction("Hint",       self._show_hint)
+        menu.addAction("About",      self._show_about)
         menu.addAction("Statistics", self._show_stats)
         menu.addSeparator()
 
         # Overlay controls
-        vis_lbl  = "Hide overlay"     if self._visible else "Show overlay"
-        lock_lbl = "Unlock position"  if self._locked  else "Lock position"
-        menu.addAction(vis_lbl,          self._toggle_visibility)
-        menu.addAction(lock_lbl,         self._toggle_lock)
-        menu.addAction("Reset session",  self._reset_session)
+        vis_lbl = "Hide overlay" if self._visible else "Show overlay"
+        menu.addAction(vis_lbl,      self._toggle_visibility)
+        menu.addAction("Set count…", self._set_count)
+        menu.addSeparator()
+
+        # Persistence toggle
+        cont_act = QAction("Remember count", menu)
+        cont_act.setCheckable(True)
+        cont_act.setChecked(self._continue_from_last)
+        cont_act.triggered.connect(self._toggle_continue_from_last)
+        menu.addAction(cont_act)
         menu.addSeparator()
 
         quit_act = QAction("Quit", menu)
@@ -263,16 +306,24 @@ class OverlayManager:
 
     def _build_tray_menu(self) -> QMenu:
         menu = QMenu()
-        menu.addAction("Stats",         self._show_stats)
-        menu.addAction("Help",          self._show_hint)
+
+        menu.addAction("Hint",          self._show_hint)
         menu.addAction("About",         self._show_about)
-        menu.addSeparator()
-        menu.addAction("Show / Hide",   self._toggle_visibility)
-        menu.addAction("Lock position", self._toggle_lock)
-        menu.addAction("Reset session", self._reset_session)
+        menu.addAction("Statistics",    self._show_stats)
         menu.addSeparator()
 
+        vis_lbl = "Hide overlay" if self._visible else "Show overlay"
+        menu.addAction(vis_lbl,         self._toggle_visibility)
+        menu.addAction("Set count…",    self._set_count)
         menu.addSeparator()
+
+        cont_act = QAction("Remember count", menu)
+        cont_act.setCheckable(True)
+        cont_act.setChecked(self._continue_from_last)
+        cont_act.triggered.connect(self._toggle_continue_from_last)
+        menu.addAction(cont_act)
+        menu.addSeparator()
+
         menu.addAction("Quit", _app.quit)
         return menu
 
@@ -293,14 +344,20 @@ class OverlayManager:
         else:
             self._overlay.show()
         self._visible = not self._visible
+        self._tray.setContextMenu(self._build_tray_menu())
 
-    def _toggle_lock(self) -> None:
-        self._locked = not self._locked
-        self._overlay.set_locked(self._locked)
+    def _set_count(self) -> None:
+        n = _SetCountDialog(self._overlay.get_game_count()).get_value()
+        if n is not None:
+            self._overlay.set_game_count(n)
+            if self._on_counter_saved_cb:
+                self._on_counter_saved_cb(n)
 
-    def _reset_session(self) -> None:
-        """Resets the display counter only — all-time stats are never touched."""
-        self._overlay.set_game_count(0)
+    def _toggle_continue_from_last(self) -> None:
+        self._continue_from_last = not self._continue_from_last
+        if self._on_continue_toggled_cb:
+            self._on_continue_toggled_cb(self._continue_from_last)
+        self._tray.setContextMenu(self._build_tray_menu())
 
     # ── Hint window ───────────────────────────────────────────────────────────
 
@@ -335,4 +392,8 @@ class OverlayManager:
             return
         self._stats_window = StatsWindow()
         self._stats_window.show()
+
+    def _refresh_stats_window(self) -> None:
+        if self._stats_window and self._stats_window.isVisible():
+            self._stats_window.refresh()
 

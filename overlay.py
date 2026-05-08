@@ -213,7 +213,6 @@ class DotWindow(QWidget):
         self._on_context_menu = on_context_menu
         self._on_moved        = on_moved
         self.in_game          = False
-        self.locked           = False
         self._drag_pos: Optional[QPoint] = None
 
         self.setWindowFlags(_WINDOW_FLAGS)
@@ -264,7 +263,7 @@ class DotWindow(QWidget):
         if event.button() == Qt.MouseButton.RightButton and ctrl:
             self._on_context_menu(QCursor.pos())
             return
-        if event.button() == Qt.MouseButton.LeftButton and ctrl and not self.locked:
+        if event.button() == Qt.MouseButton.LeftButton and ctrl:
             self._drag_pos = (
                 event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             )
@@ -349,9 +348,6 @@ class Overlay:
 
     def get_game_count(self) -> int:
         return self._panel.game_count
-
-    def set_locked(self, locked: bool) -> None:
-        self._dot.locked = locked
 
     def show(self) -> None:
         self._panel.show()

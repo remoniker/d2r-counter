@@ -25,18 +25,17 @@ from typing import Optional
 import logging
 from logging.handlers import RotatingFileHandler
 
-# ── Logging flags ─────────────────────────────────────────────────────────────
+from config import config
 
-ENABLE_PACKET_LOG = True
-ENABLE_RUN_LOG    = True
+os.makedirs("logs", exist_ok=True)
 
 # ── packetLog ─────────────────────────────────────────────────────────────────
 
 packetLog = logging.getLogger("d2r.packets")
-if ENABLE_PACKET_LOG:
+if config.enable_packet_log:
     packetLog.setLevel(logging.DEBUG)
     _pkt_handler = RotatingFileHandler(
-        "packet.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+        "logs/packet.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
     )
     _pkt_handler.setFormatter(logging.Formatter(
         "%(asctime)s  %(levelname)-8s  %(message)s",
@@ -49,10 +48,10 @@ else:
 # ── runLog ────────────────────────────────────────────────────────────────────
 
 runLog = logging.getLogger("d2r.runs")
-if ENABLE_RUN_LOG:
+if config.enable_run_log:
     runLog.setLevel(logging.INFO)
     _run_handler = RotatingFileHandler(
-        "run.log", maxBytes=2 * 1024 * 1024, backupCount=5, encoding="utf-8"
+        "logs/run.log", maxBytes=2 * 1024 * 1024, backupCount=5, encoding="utf-8"
     )
     _run_handler.setFormatter(logging.Formatter(
         "%(asctime)s  %(message)s",
@@ -254,14 +253,12 @@ _STATS_DEFAULT = {
         "unique_servers":        [],
     },
     "last_run": {
-        "started_at":   None,
-        "ended_at":     None,
-        "games":        0,
-        "game_seconds": 0,
-        "crashed":      False,
-    },
-    "prefs": {
-        "hint_shown": False,
+        "started_at":      None,
+        "ended_at":        None,
+        "games":           0,
+        "game_seconds":    0,
+        "elapsed_seconds": 0,
+        "crashed":         False,
     },
 }
 
@@ -312,6 +309,8 @@ class StatsManager:
         return copy.deepcopy(_STATS_DEFAULT)
 
     def _save(self) -> None:
+        if self._data["last_run"].get("started_at"):
+            self._data["last_run"]["elapsed_seconds"] = int(time.monotonic() - self._app_start)
         tmp = self._path + ".tmp"
         try:
             with open(tmp, "w", encoding="utf-8") as f:
@@ -402,18 +401,6 @@ class StatsManager:
         if at["total_games"] == 0:
             return 0.0
         return at["total_game_seconds"] / at["total_games"]
-
-    def last_run_games(self) -> int:
-        return self._data["last_run"]["games"]
-
-    @property
-    def hint_shown(self) -> bool:
-        return self._data["prefs"].get("hint_shown", False)
-
-    def mark_hint_shown(self) -> None:
-        with self._lock:
-            self._data["prefs"]["hint_shown"] = True
-            self._save()
 
     # ── Console summary ───────────────────────────────────────────────────────
 
@@ -941,12 +928,17 @@ def main() -> None:
                 )
         if active_secs:
             stats.on_game_left(active_secs)
+        config.set_overlay_position(*manager.get_overlay_position())
         stats.on_session_end()
 
     manager = OverlayManager(
-        on_hint_dismissed  = stats.mark_hint_shown,
-        show_hint_on_start = True,
-        # show_hint_on_start = not stats.hint_shown,
+        on_hint_dismissed   = config.mark_hint_shown,
+        show_hint_on_start  = not config.hint_shown,
+        initial_count       = config.last_seen_counter if config.continue_from_last else 0,
+        continue_from_last  = config.continue_from_last,
+        on_counter_saved    = config.set_last_seen_counter,
+        on_continue_toggled = config.set_continue_from_last,
+        initial_pos         = config.overlay_position,
     )
     manager.app.aboutToQuit.connect(_on_quit)
     manager.run()

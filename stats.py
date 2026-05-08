@@ -14,7 +14,9 @@ from typing import Optional
 
 from PyQt6.QtWidgets import QApplication, QWidget, QPushButton, QLabel
 from PyQt6.QtCore import Qt, QPoint
-from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QMouseEvent
+from PyQt6.QtGui import QPainter, QPen, QFont, QMouseEvent
+
+from theme import GOLD, BLUE, BG, DIVIDER, CLOSE_BTN_QSS, WINDOW_FLAGS
 
 # ── Geometry ──────────────────────────────────────────────────────────────────
 
@@ -31,18 +33,22 @@ HEADER_H    = 42   # space for title + divider
 
 # Sections and their rows — built dynamically so H is computed from content
 _SECTIONS = [
-    ("", [
+    ("THIS SESSION", [
+        "session_games",
+        "runs_per_hour",
+        "session_game_seconds",
+    ]),
+    ("ALL TIME", [
         "total_games",
         "avg_game_duration",
-        "total_sessions",
         "total_game_seconds",
-        # "total_app_seconds",
+        "total_sessions",
         "longest_game_seconds",
         "most_games_in_session",
         "unique_servers",
         "first_game_at",
         "last_game_at",
-    ])
+    ]),
 ]
 
 def _compute_height() -> int:
@@ -56,42 +62,6 @@ def _compute_height() -> int:
 
 H = _compute_height()
 
-# ── Window flags ──────────────────────────────────────────────────────────────
-
-_FLAGS = (
-    Qt.WindowType.FramelessWindowHint   |
-    Qt.WindowType.WindowStaysOnTopHint  |
-    Qt.WindowType.Tool                  |
-    Qt.WindowType.NoDropShadowWindowHint
-)
-
-# ── Palette ───────────────────────────────────────────────────────────────────
-
-_IDLE_ACCENT   = QColor("#387CBC")
-_ACTIVE_ACCENT = QColor("#8E47DE")
-_GOLD_ACCENT   = QColor("#CCB980")
-_BG      = QColor(14,  14,  14,  255)
-_BORDER  = QColor(255, 255, 255, 70)
-_ACCENT  = QColor("#387CBC")
-_SECTION = QColor("#CCB980")       # section label
-_KEY     = QColor("#CCB980")     # left-hand stat label
-_VAL     = _IDLE_ACCENT   # right-hand stat value
-_DIVIDER = QColor(32,  32,  32)
-
-# ── Stylesheets ───────────────────────────────────────────────────────────────
-
-_CLOSE_QSS = """
-QPushButton {
-    background: transparent;
-    border: none;
-    color: rgb(55, 55, 55);
-    font-family: "Segoe UI";
-    font-size: 15pt;
-    padding: 0px 2px 2px 2px;
-}
-QPushButton:hover   { color: rgb(180, 180, 180); }
-QPushButton:pressed { color: rgb(255, 255, 255); }
-"""
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -145,33 +115,36 @@ def _fmt_val(key: str, data: dict, lr: dict) -> str:
     if key == "last_game_at":
         return at.get("last_game_at") or "—"
 
-    if key == "lr_started_at":
-        return lr.get("started_at") or "—"
-
-    if key == "lr_games":
+    if key == "session_games":
         return str(lr.get("games", 0))
 
-    if key == "lr_game_seconds":
+    if key == "session_game_seconds":
         return _fmt_duration(lr.get("game_seconds", 0))
+
+    if key == "runs_per_hour":
+        games   = lr.get("games", 0)
+        elapsed = lr.get("elapsed_seconds", 0)
+        if elapsed < 60 or games == 0:
+            return "—"
+        return f"{games / (elapsed / 3600):.1f} / hr"
 
     return "—"
 
 def _label(key: str) -> str:
     """Human-readable left-hand label for a stat key."""
     return {
+        "session_games":         "Games",
+        "session_game_seconds":  "Time in-game",
+        "runs_per_hour":         "Runs / hour",
         "total_games":           "Total games",
         "total_sessions":        "Sessions",
         "total_game_seconds":    "Total time in-game",
-        # "total_app_seconds":     "App runtime",
-        "avg_game_duration":     "Average game time",
+        "avg_game_duration":     "Avg game time",
         "longest_game_seconds":  "Longest game",
         "most_games_in_session": "Best session",
         "unique_servers":        "Unique servers",
         "first_game_at":         "First game",
         "last_game_at":          "Last game",
-        # "lr_started_at":         "Started",
-        # "lr_games":              "Games",
-        # "lr_game_seconds":       "Time in-game",
     }.get(key, key)
 
 
@@ -194,10 +167,11 @@ class StatsWindow(QWidget):
         self._drag_pos: Optional[QPoint] = None
         self._stats_path = stats_path
 
-        self.setWindowFlags(_FLAGS)
+        self.setWindowFlags(WINDOW_FLAGS)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(W, H)
 
+        self._val_labels: dict[str, QLabel] = {}
         data, lr = _read_stats(stats_path)
         self._build_ui(data, lr)
         self._center_on_screen()
@@ -208,29 +182,29 @@ class StatsWindow(QWidget):
 
         # ── Close button ──────────────────────────────────────────────────────
         close = QPushButton("×", self)
-        close.setStyleSheet(_CLOSE_QSS)
+        close.setStyleSheet(CLOSE_BTN_QSS)
         close.setFixedSize(26, 26)
         close.move(W - 32, 6)
         close.setCursor(Qt.CursorShape.PointingHandCursor)
         close.clicked.connect(self.close)
 
         # ── Title ─────────────────────────────────────────────────────────────
-        title = QLabel("D2R - GAME COUNTER", self)
+        title = QLabel("Statistics", self)
         title.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         f_title = QFont("Segoe UI", 12)
-        f_title.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 2.5)
+        f_title.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.0)
         title.setFont(f_title)
-        title.setStyleSheet(f"color: {_ACCENT.name()}; background: transparent;")
+        title.setStyleSheet(f"color: {GOLD.name()}; background: transparent;")
         title.move(PAD_L, PAD_T)
         title.adjustSize()
 
-        sub = QLabel("LIFETIME STATISTICS", self)
+        sub = QLabel("D2R Counter", self)
         sub.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        f_sub = QFont("Segoe UI", 10)
-        f_sub.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 2.0)
+        f_sub = QFont("Segoe UI", 8)
+        f_sub.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.0)
         sub.setFont(f_sub)
-        sub.setStyleSheet(f"color: {_KEY.name()}; background: transparent;")
-        sub.move(PAD_L, PAD_T + 16)
+        sub.setStyleSheet(f"color: {BLUE.name()}; background: transparent;")
+        sub.move(PAD_L, PAD_T + 18)
         sub.adjustSize()
 
         # ── Stat rows ─────────────────────────────────────────────────────────
@@ -248,7 +222,7 @@ class StatsWindow(QWidget):
             sec_lbl = QLabel(section_label, self)
             sec_lbl.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
             sec_lbl.setFont(f_sec)
-            sec_lbl.setStyleSheet(f"color: {_SECTION.name()}; background: transparent;")
+            sec_lbl.setStyleSheet(f"color: {GOLD.name()}; background: transparent;")
             sec_lbl.move(PAD_L, y + 4)
             sec_lbl.adjustSize()
             y += ROW_H
@@ -261,7 +235,7 @@ class StatsWindow(QWidget):
                 k = QLabel(lbl_str, self)
                 k.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
                 k.setFont(f_key)
-                k.setStyleSheet(f"color: {_KEY.name()}; background: transparent;")
+                k.setStyleSheet(f"color: {GOLD.name()}; background: transparent;")
                 k.move(PAD_L, y + 3)
                 k.adjustSize()
 
@@ -269,13 +243,21 @@ class StatsWindow(QWidget):
                 v = QLabel(val_str, self)
                 v.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
                 v.setFont(f_val)
-                v.setStyleSheet(f"color: {_VAL.name()}; background: transparent;")
+                v.setStyleSheet(f"color: {BLUE.name()}; background: transparent;")
                 v.adjustSize()
                 v.move(W - PAD_R - v.width(), y + 3)
+                self._val_labels[key] = v
 
                 y += ROW_H
 
             y += SECTION_GAP
+
+    def refresh(self) -> None:
+        data, lr = _read_stats(self._stats_path)
+        for key, lbl in self._val_labels.items():
+            lbl.setText(_fmt_val(key, data, lr))
+            lbl.adjustSize()
+            lbl.move(W - PAD_R - lbl.width(), lbl.y())
 
     # ── Paint ─────────────────────────────────────────────────────────────────
 
@@ -285,18 +267,18 @@ class StatsWindow(QWidget):
 
         # Background
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(_BG)
+        p.setBrush(BG)
         p.drawRoundedRect(0, 0, W, H, R, R)
 
         # White border
-        border_pen = QPen(_GOLD_ACCENT)
+        border_pen = QPen(GOLD)
         border_pen.setWidthF(1.0)
         p.setPen(border_pen)
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawRoundedRect(0, 0, W - 1, H - 1, R, R)
 
         # Divider under header
-        div_pen = QPen(_DIVIDER)
+        div_pen = QPen(DIVIDER)
         div_pen.setWidthF(0.8)
         p.setPen(div_pen)
         p.drawLine(PAD_L, PAD_T + HEADER_H - 4, W - PAD_R, PAD_T + HEADER_H - 4)

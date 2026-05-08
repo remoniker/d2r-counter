@@ -8,7 +8,9 @@ from typing import Optional
 
 from PyQt6.QtWidgets import QApplication, QWidget, QPushButton, QLabel
 from PyQt6.QtCore import Qt, QPoint
-from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QMouseEvent
+from PyQt6.QtGui import QPainter, QPen, QFont, QMouseEvent
+
+from theme import GOLD, BLUE, BG, DIVIDER, CLOSE_BTN_QSS, WINDOW_FLAGS
 
 # ── Geometry ──────────────────────────────────────────────────────────────────
 
@@ -59,39 +61,6 @@ def _compute_height() -> int:
 
 H = _compute_height()
 
-# ── Window flags ──────────────────────────────────────────────────────────────
-
-_FLAGS = (
-    Qt.WindowType.FramelessWindowHint   |
-    Qt.WindowType.WindowStaysOnTopHint  |
-    Qt.WindowType.Tool                  |
-    Qt.WindowType.NoDropShadowWindowHint
-)
-
-# ── Palette (matches stats.py exactly) ───────────────────────────────────────
-
-_GOLD_ACCENT = QColor("#CCB980")
-_BG      = QColor(14,  14,  14,  255)
-_BORDER  = QColor(255, 255, 255,  70)
-_ACCENT  = QColor("#387CBC")
-_SECTION = QColor("#CCB980")
-_BODY    = QColor("#CCB980")
-_DIVIDER = QColor(32,  32,  32)
-
-# ── Stylesheets ───────────────────────────────────────────────────────────────
-
-_CLOSE_QSS = """
-QPushButton {
-    background: transparent;
-    border: none;
-    color: rgb(55, 55, 55);
-    font-family: "Segoe UI";
-    font-size: 15pt;
-    padding: 0px 2px 2px 2px;
-}
-QPushButton:hover   { color: rgb(180, 180, 180); }
-QPushButton:pressed { color: rgb(255, 255, 255); }
-"""
 
 
 # ── AboutWindow ───────────────────────────────────────────────────────────────
@@ -101,7 +70,7 @@ class AboutWindow(QWidget):
         super().__init__()
         self._drag_pos: Optional[QPoint] = None
 
-        self.setWindowFlags(_FLAGS)
+        self.setWindowFlags(WINDOW_FLAGS)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(W, H)
 
@@ -112,28 +81,28 @@ class AboutWindow(QWidget):
 
     def _build_ui(self) -> None:
         close = QPushButton("×", self)
-        close.setStyleSheet(_CLOSE_QSS)
+        close.setStyleSheet(CLOSE_BTN_QSS)
         close.setFixedSize(26, 26)
         close.move(W - 32, 6)
         close.setCursor(Qt.CursorShape.PointingHandCursor)
         close.clicked.connect(self.close)
 
-        title = QLabel("D2R - GAME COUNTER", self)
+        title = QLabel("About", self)
         title.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         f_title = QFont("Segoe UI", 12)
-        f_title.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 2.5)
+        f_title.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.0)
         title.setFont(f_title)
-        title.setStyleSheet(f"color: {_ACCENT.name()}; background: transparent;")
+        title.setStyleSheet(f"color: {GOLD.name()}; background: transparent;")
         title.move(PAD_L, PAD_T)
         title.adjustSize()
 
-        sub = QLabel("ABOUT", self)
+        sub = QLabel("D2R Counter", self)
         sub.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        f_sub = QFont("Segoe UI", 10)
-        f_sub.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 2.0)
+        f_sub = QFont("Segoe UI", 8)
+        f_sub.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.0)
         sub.setFont(f_sub)
-        sub.setStyleSheet(f"color: {_SECTION.name()}; background: transparent;")
-        sub.move(PAD_L, PAD_T + 16)
+        sub.setStyleSheet(f"color: {BLUE.name()}; background: transparent;")
+        sub.move(PAD_L, PAD_T + 18)
         sub.adjustSize()
 
         f_sec  = QFont("Segoe UI", 10)
@@ -151,7 +120,7 @@ class AboutWindow(QWidget):
                 lbl = QLabel(text, self)
                 lbl.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
                 lbl.setFont(f_sec)
-                lbl.setStyleSheet(f"color: {_SECTION.name()}; background: transparent;")
+                lbl.setStyleSheet(f"color: {GOLD.name()}; background: transparent;")
                 lbl.move(PAD_L, y + 4)
                 lbl.adjustSize()
                 y += ROW_H + 4
@@ -160,7 +129,7 @@ class AboutWindow(QWidget):
             lbl = QLabel(text, self)
             lbl.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
             lbl.setFont(f_body)
-            lbl.setStyleSheet(f"color: {_BODY.name()}; background: transparent;")
+            lbl.setStyleSheet(f"color: {GOLD.name()}; background: transparent;")
             lbl.move(PAD_L, y + 3)
             lbl.adjustSize()
             y += ROW_H
@@ -172,16 +141,16 @@ class AboutWindow(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(_BG)
+        p.setBrush(BG)
         p.drawRoundedRect(0, 0, W, H, R, R)
 
-        border_pen = QPen(_GOLD_ACCENT)
+        border_pen = QPen(GOLD)
         border_pen.setWidthF(1.0)
         p.setPen(border_pen)
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawRoundedRect(0, 0, W - 1, H - 1, R, R)
 
-        div_pen = QPen(_DIVIDER)
+        div_pen = QPen(DIVIDER)
         div_pen.setWidthF(0.8)
         p.setPen(div_pen)
         p.drawLine(PAD_L, PAD_T + HEADER_H - 4, W - PAD_R, PAD_T + HEADER_H - 4)

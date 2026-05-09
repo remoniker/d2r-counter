@@ -30,7 +30,7 @@ HEADER_H    = 42
 
 _ROWS = [
     ("A safe for battle.net game counter for D2R.",    "body"),
-    ("This program assively reads local traffic to ", "body"),
+    ("This program passively reads local traffic to ", "body"),
     ("determine games played and duration.",   "body"),
     ("", "gap"),
     ("CONTROLS", "section"),

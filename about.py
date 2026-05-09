@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import QApplication, QWidget, QPushButton, QLabel
 from PyQt6.QtCore import Qt, QPoint
 from PyQt6.QtGui import QPainter, QPen, QFont, QMouseEvent
 
-from theme import GOLD, BLUE, BG, DIVIDER, CLOSE_BTN_QSS, WINDOW_FLAGS
+from theme import GOLD, BLUE, BG, DIVIDER, TEXT, CLOSE_BTN_QSS, WINDOW_FLAGS
 
 # ── Geometry ──────────────────────────────────────────────────────────────────
 
@@ -29,20 +29,20 @@ HEADER_H    = 42
 # Edit this list to customise what the About window shows.
 
 _ROWS = [
-    ("OVERVIEW",  "section"),
-    ("D2R Counter is a minimal overlay for", "body"),
-    ("Diablo II: Resurrected. It detects",   "body"),
-    ("game joins automatically and tracks",  "body"),
-    ("your sessions without manual input.",  "body"),
-    ("", "gap"),
-    ("HOW IT WORKS", "section"),
-    ("Monitors TCP traffic on port 443 to",  "body"),
-    ("detect join and leave events.",        "body"),
-    ("Requires Npcap + run as Administrator.","body"),
+    ("A safe for battle.net game counter for D2R.",    "body"),
+    ("This program assively reads local traffic to ", "body"),
+    ("determine games played and duration.",   "body"),
     ("", "gap"),
     ("CONTROLS", "section"),
-    ("Ctrl + drag          Move the overlay", "body"),
-    ("Ctrl + right-click   Options menu",     "body"),
+    ("Ctrl + drag the dot — move the overlay",  "body"),
+    ("Ctrl + right-click the dot — open menu",  "body"),
+    ("", "gap"),
+    ("OPTIONS", "section"),
+    ("Remember count — persist on exit",       "body"),
+    ("Set count — manually set the counter",   "body"),
+    ("Hide overlay — toggle visibility",       "body"),
+    ("Statistics — session and all-time data", "body"),
+    ("Menu options also available from systray icon",  "body"),
 ]
 
 
@@ -129,7 +129,7 @@ class AboutWindow(QWidget):
             lbl = QLabel(text, self)
             lbl.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
             lbl.setFont(f_body)
-            lbl.setStyleSheet(f"color: {GOLD.name()}; background: transparent;")
+            lbl.setStyleSheet(f"color: {TEXT.name()}; background: transparent;")
             lbl.move(PAD_L, y + 3)
             lbl.adjustSize()
             y += ROW_H

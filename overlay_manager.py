@@ -20,6 +20,7 @@ Usage in main():
     manager.run()
 """
 
+import os
 import sys
 from typing import Optional, Callable
 
@@ -40,6 +41,11 @@ _app = QApplication.instance() or QApplication(sys.argv)
 
 
 
+
+
+def _resource(name: str) -> str:
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, name)
 
 
 def _get_styles() -> dict[str, type]:
@@ -182,6 +188,8 @@ class OverlayManager:
         self._overlay = self._instantiate(DEFAULT_STYLE, pos=saved_pos)
         if initial_count:
             self._overlay.set_game_count(initial_count)
+        self._overlay.hide()
+        QTimer.singleShot(0, self._overlay.show)
 
         # ── 50 ms tick — forwarded to whatever overlay is active ──────────────
         self._timer = QTimer()
@@ -191,7 +199,7 @@ class OverlayManager:
 
         # ── System tray ───────────────────────────────────────────────────────
         self._tray = QSystemTrayIcon()
-        self._tray.setIcon(QIcon("off.ico"))
+        self._tray.setIcon(QIcon(_resource("off.ico")))
         self._tray.setToolTip("D2R Counter  |  Ctrl+right-click overlay for options")
         self._tray.setContextMenu(self._build_tray_menu())
         self._tray.show()

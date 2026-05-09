@@ -16,6 +16,7 @@ PURPLE  = QColor("#8E47DE")
 BG      = QColor(14, 14, 14, 255)
 BORDER  = QColor(255, 255, 255, 70)
 DIVIDER = QColor(32, 32, 32)
+TEXT    = QColor(158, 158, 158)   # body / secondary labels
 
 # ── Window flags ──────────────────────────────────────────────────────────────
 

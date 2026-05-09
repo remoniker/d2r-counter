@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import QApplication, QWidget, QPushButton, QLabel
 from PyQt6.QtCore import Qt, QPoint
 from PyQt6.QtGui import QPainter, QPen, QFont, QMouseEvent
 
-from theme import GOLD, BLUE, BG, DIVIDER, CLOSE_BTN_QSS, WINDOW_FLAGS
+from theme import GOLD, BLUE, BG, DIVIDER, TEXT, CLOSE_BTN_QSS, WINDOW_FLAGS
 
 # ── Geometry ──────────────────────────────────────────────────────────────────
 
@@ -235,7 +235,7 @@ class StatsWindow(QWidget):
                 k = QLabel(lbl_str, self)
                 k.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
                 k.setFont(f_key)
-                k.setStyleSheet(f"color: {GOLD.name()}; background: transparent;")
+                k.setStyleSheet(f"color: {TEXT.name()}; background: transparent;")
                 k.move(PAD_L, y + 3)
                 k.adjustSize()
 

@@ -1,0 +1,15 @@
+// D2R Game Counter
+- hint window updates - position, description, size
+
+- stats window create and add to dropdown
+- stats set time to more readable format in json than seconds
+- decide if keeping server list in release build
+
+- determine if more overhead exists and cpu use / resource use 
+-- timer based? how to monitor usage
+
+- makefile / or some kind of automated build for release
+- readme.md file explaining what it is and how it works
+
+- adding features set number and resume previous run count
+- start-stop or play-pause feature? 

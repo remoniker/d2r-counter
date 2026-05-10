@@ -1,45 +1,51 @@
 # D2R Counter
 
-A lightweight, passive game-session tracker for Diablo II: Resurrected. D2R Counter monitors local TCP traffic to automatically detect when you join and leave a game — no manual input, no interaction with the game process.
+A lightweight, passive game-session tracker for Diablo II: Resurrected. Monitors local TCP traffic to automatically detect game joins and leaves — no manual input, no interaction with the game process.
+
+---
+
+## About
+
+D2R Counter runs alongside D2R and increments a counter each time you join a game. It tracks game duration, runs per hour, and session and all-time statistics. All data is stored locally in JSON files. D2R can be launched before or after D2R Counter — it polls for `D2R.exe` automatically.
 
 ![Overlay](docs/overlay.png)
-*The overlay dot and stat panel during an active session.*
+
+The overlay is two small always-on-top transparent windows — a coloured dot (blue when idle, purple in-game) and a stat panel showing the current count and a live timer. The panel is click-through; only the dot is interactive.
+
+### Controls
+
+| Action | Result |
+|---|---|
+| `Ctrl` + left-drag the dot | Move the overlay |
+| `Ctrl` + right-click the dot | Open the options menu |
+| Right-click the tray icon | Same options menu |
+
+Position is saved on quit and restored on the next launch.
+
+### Options
+
+| Option | Description |
+|---|---|
+| **Hint** | Re-show the first-launch control reference |
+| **About** | Open the About window |
+| **Statistics** | Session and all-time stats |
+| **Hide / Show overlay** | Toggle dot and panel visibility |
+| **Set count…** | Manually set the display counter (0–99,999) |
+| **Remember count** | Persist the counter across restarts — written on each game leave, restored on next launch |
+| **Quit** | Save all data and exit cleanly |
+
+### Logging
+
+Two log files are written to `logs/` alongside the executable:
+
+- **`run.log`** — one line per join/leave with server IP, game number, and duration. A permanent human-readable record of your sessions.
+- **`packet.log`** — per-packet classifier detail for every tracked connection candidate. Used for threshold tuning (see [Log-Driven Threshold Tuning](#log-driven-threshold-tuning)). Can be disabled if not needed.
+
+Both logs can be independently disabled by setting `enable_run_log` or `enable_packet_log` to `false` in `config.json` and restarting.
 
 ---
 
-## Table of Contents
-
-1. [What It Is](#1-what-it-is)
-2. [Why It's Safe for Battle.net](#2-why-its-safe-for-battlenet)
-3. [Requirements](#3-requirements)
-4. [Installation](#4-installation)
-5. [Running](#5-running)
-6. [How Detection Works](#6-how-detection-works)
-   - [The BPF Filter](#the-bpf-filter)
-   - [Connection Candidates and the State Machine](#connection-candidates-and-the-state-machine)
-   - [The Classifier](#the-classifier)
-   - [Threshold Reference](#threshold-reference)
-   - [Log-Driven Threshold Tuning](#log-driven-threshold-tuning)
-7. [UI Windows](#7-ui-windows)
-8. [Configuration and Usage](#8-configuration-and-usage)
-9. [Data Files](#9-data-files)
-10. [Troubleshooting](#10-troubleshooting)
-11. [Building from Source](#11-building-from-source)
-12. [Function Reference](#12-function-reference)
-
----
-
-## 1. What It Is
-
-D2R Counter runs alongside Diablo II: Resurrected and automatically increments a game counter each time you join a game — no button presses required. It tracks game duration, runs per hour, session statistics, and maintains an all-time record of your runs.
-
-The overlay is a small, always-on-top transparent window that stays out of your way. The counter and live timer update in real time. All data is stored locally in JSON files.
-
-D2R can be launched before or after D2R Counter — the application polls for `D2R.exe` and picks it up automatically.
-
----
-
-## 2. Why It's Safe for Battle.net
+## Why It's Safe for Battle.net
 
 **D2R Counter is entirely passive and read-only. It never sends, modifies, or injects any data.**
 
@@ -59,7 +65,7 @@ Battle.net's anti-cheat (Warden) targets code injection, memory modification, AP
 
 ---
 
-## 3. Requirements
+## Requirements
 
 - **Windows 10 / 11** — the sniffer depends on Npcap, which is Windows-only
 - **[Npcap](https://npcap.com/#download)** — the packet capture driver; install with *WinPcap API-compatible mode* enabled
@@ -73,15 +79,25 @@ If running from source:
 
 ---
 
-## 4. Installation
+## Installation
 
 ### Standalone (Recommended)
 
-1. Download and extract the `D2RCounter` folder.
-2. Install [Npcap](https://npcap.com/#download) if you have not already.
-3. Right-click `D2RCounter.exe` → **Run as administrator**.
+**[Download the latest release →](https://github.com/USERNAME/D2RCounter/releases/latest)**
 
-`stats.json`, `config.json`, and the `logs/` folder will be created automatically in the same directory as the `.exe`.
+Extract the `D2RCounter` folder anywhere. Right-click `D2RCounter.exe` → **Run as administrator**.
+
+`stats.json`, `config.json`, and the `logs/` folder are created automatically on first run.
+
+### Npcap
+
+Npcap ships with Wireshark and several developer tools, so it may already be on your machine. To check, open a command prompt and run:
+
+```
+sc query npcap
+```
+
+If you see `STATE: 4 RUNNING`, you're set. Otherwise, [download and install Npcap](https://npcap.com/#download) — enable **WinPcap API-compatible mode** during setup.
 
 ### From Source
 
@@ -91,7 +107,7 @@ cd D2RCounter
 pip install scapy psutil PyQt6
 ```
 
-Run as Administrator:
+Then run as Administrator:
 
 ```
 python main.py
@@ -99,23 +115,7 @@ python main.py
 
 ---
 
-## 5. Running
-
-D2R Counter **must be launched as Administrator**. Without elevation, Npcap cannot open the raw capture interface and the program exits immediately with an access-denied error.
-
-On launch, a console window opens showing:
-
-- Your detected local IP address
-- All active detection threshold values
-- All-time stats from previous sessions
-
-The system tray icon appears and the overlay positions on screen. When you join a game, the console prints a detailed join event, the overlay counter increments, and the in-game timer starts. When you leave, the timer freezes showing the final game duration and the counter remains.
-
-D2R does not need to be running when D2R Counter starts. The PID watcher checks every 5 seconds and logs when it finds or loses `D2R.exe`.
-
----
-
-## 6. How Detection Works
+## How Detection Works
 
 ### The BPF Filter
 
@@ -246,79 +246,7 @@ The `DISQ=[...]` field in `packet.log` is particularly useful for this process. 
 
 ---
 
-## 7. UI Windows
-
-### Main Overlay — Dot and StatPanel
-
-The overlay is two frameless, transparent, always-on-top windows that move together:
-
-**DotWindow** — The interactive orb. It is the draggable handle and the primary visual status indicator. The orb is blue when idle and purple when a game is active. `Ctrl + left-drag` moves both windows. `Ctrl + right-click` opens the options menu. The window is sized at 300×100px even though the visible orb is much smaller; the extra area is fully transparent and passes input through.
-
-**StatPanel** — The stat card to the right of the dot. Displays the current game count, an `IN GAME` / `GAMES` label, a divider, and either a live centisecond timer while in a game or the duration of the most recent completed game. The panel is set `WindowTransparentForInput` — clicks pass through it so it never interferes with the game.
-
-Both windows use `WA_TranslucentBackground` and are drawn entirely in `paintEvent` via `QPainter` with no OS window chrome.
-
-![Overlay In-Game](docs/overlay_ingame.png)
-*The dot turns purple and the timer counts up while in a game.*
-
-### Statistics Window
-
-Opened from the options menu or tray. Shows two sections:
-
-- **This Session** — games this run, runs per hour, time in-game this session
-- **All Time** — total games, average game time, total time in-game, total sessions, longest game, best session (most games), unique servers seen, first and last game timestamps
-
-Data is read fresh from `stats.json` each time the window is opened. While open, the displayed values update live whenever a join or leave event fires — without rebuilding the window. Right-hand value labels are repositioned after each update so they remain right-aligned regardless of text length.
-
-### About Window
-
-Opened from the options menu or tray. Shows a brief description of the program, a controls reference, and the available options. Content is defined in the `_ROWS` list at the top of `about.py` — each entry is a `(text, kind)` tuple where `kind` is `"section"`, `"body"`, or `"gap"`. Editing that list is sufficient to update the displayed text; window height is recomputed automatically from the row list at module load time.
-
-### Set Counter Dialog
-
-Opened via **Set count…** in either menu. A small frameless dialog matching the application style. Contains a spin box accepting values from 0 to 99,999. Draggable. Confirms with OK or dismisses with Cancel.
-
-This only changes the *display counter* on the overlay. `StatsManager` is unaffected — its game count is always derived from real detected join events and is not adjustable from the UI.
-
-### Hint Window
-
-Shown automatically on first launch; available from the menu thereafter. A short control reference anchored below the overlay dot, using a typewriter animation. Dismisses on `Ctrl + click` anywhere or via the dismiss button. The hint repositions itself to track the dot when the overlay is dragged, so it never gets separated from the orb it is describing.
-
-After being dismissed for the first time, the hint is not shown automatically on subsequent launches. This is recorded in `config.json` (`hint_shown: true`).
-
----
-
-## 8. Configuration and Usage
-
-### Moving the Overlay
-
-Hold `Ctrl` and left-drag the dot. The stat panel follows. Position is saved to `config.json` on exit and restored on the next launch.
-
-### Opening the Menu
-
-Hold `Ctrl` and right-click the dot. The identical menu is also available from the system tray icon (right-click the tray).
-
-### Menu Options
-
-| Option | Description |
-|---|---|
-| **Hint** | Re-shows the hint window |
-| **About** | Opens the About window |
-| **Statistics** | Opens the Statistics window |
-| **Hide overlay / Show overlay** | Toggles dot and panel visibility |
-| **Set count…** | Opens the Set Counter dialog to manually adjust the display counter |
-| **Remember count** | Checkbox. When checked, the display counter is saved on each game leave and restored on the next launch |
-| **Quit** | Cleanly shuts down, saving all stats and the current overlay position |
-
-### Remember Count
-
-When **Remember count** is enabled, the display counter is written to `config.json` each time you leave a game. On the next launch, the counter resumes from that value instead of starting at zero.
-
-Useful for marathon sessions across multiple application restarts, or if you want the counter to reflect total runs across a day rather than just the current session.
-
----
-
-## 9. Data Files
+## Data Files
 
 ### stats.json
 
@@ -356,7 +284,7 @@ If a previous session has a `started_at` but no `ended_at` when the app starts, 
 
 ### config.json
 
-Stores user preferences. Created on first write — typically when you first change a setting or quit cleanly. If `config.json` does not exist but `stats.json` contains a legacy `prefs` section, those values are migrated automatically.
+Stores user preferences. Created on first write — typically when you first change a setting or quit cleanly.
 
 ```json
 {
@@ -379,22 +307,11 @@ Stores user preferences. Created on first write — typically when you first cha
 | `enable_packet_log` | `true` | Whether `logs/packet.log` is written |
 | `enable_run_log` | `true` | Whether `logs/run.log` is written |
 
-To disable a log, set the corresponding flag to `false` and restart. The logger is disabled entirely — no file is opened or written.
-
 ### Log Files
 
-Both log files live in the `logs/` subfolder alongside the executable and rotate automatically.
+Both log files live in the `logs/` subfolder and rotate automatically.
 
-**`logs/run.log`** — High-level session log. Human-readable and appropriate as a permanent record.
-
-- Application starts and stops
-- Game joins with server IP and game number
-- Game leaves with duration and early-abandon tags
-- D2R process found / lost
-- Battle.net connection detected
-- Crash/unclean exit warnings
-
-Rotates at 2 MB, keeps 5 backup files.
+**`logs/run.log`** — High-level session log. Records application starts/stops, game joins with server IP and game number, game leaves with duration, D2R process found/lost, and crash warnings. Rotates at 2 MB, keeps 5 backup files.
 
 ```
 2025-04-30 20:00:00  *** APPLICATION STARTED ***
@@ -402,11 +319,7 @@ Rotates at 2 MB, keeps 5 backup files.
 2025-04-30 20:03:28  GAME LEFT    #1  server=12.34.56.78:443  (duration: 1m 45s)
 ```
 
-**`logs/packet.log`** — Detailed per-packet debug log. Records every inbound data packet for every candidate connection with all classifier metrics. Also records CANDIDATE (connection seen), JOINED (promoted), EXPIRED (timed out), and DISQ (disqualification reason).
-
-Used for threshold tuning — see [Log-Driven Threshold Tuning](#log-driven-threshold-tuning).
-
-Can grow quickly during active play. Rotates at 5 MB, keeps 3 backup files.
+**`logs/packet.log`** — Per-packet classifier detail for every candidate connection. Records CANDIDATE (seen), JOINED (promoted), EXPIRED (timed out), and DISQ (disqualification reason) events. Used for threshold tuning. Rotates at 5 MB, keeps 3 backup files.
 
 ```
 2025-04-30 20:01:41  INFO      CANDIDATE  12.34.56.78:443  local:54321  tracking=1
@@ -417,90 +330,17 @@ Can grow quickly during active play. Rotates at 5 MB, keeps 3 backup files.
 
 ---
 
-## 10. Troubleshooting
-
-**"Access denied — run as Administrator."**
-The sniffer requires elevation. Right-click the exe or the terminal → Run as administrator.
-
----
-
-**Npcap error on startup / sniffer fails**
-Install [Npcap](https://npcap.com/#download). During installation, enable *WinPcap API-compatible mode*. If Npcap is already installed, try reinstalling it. Scapy on Windows requires Npcap specifically; the built-in Windows packet capture API is not supported.
-
----
-
-**Overlay appears but games are not being detected**
-1. Check the console for `Found D2R.exe (PID XXXX)`. If absent, D2R is not running or is not found by name.
-2. Check the console for `✔ Connected to Battle.net`. If absent after logging in, the BPF filter may not be matching your active interface — confirm that `LOCAL_IP` shown in the console matches your active network adapter's IP (not a VPN, virtual, or inactive adapter).
-3. Open `logs/packet.log` and look for `CANDIDATE` entries around the time you joined. If candidates appear and then `EXPIRED`, read the `reason=[...]` field to see which disqualifier fired. If no candidates appear at all, the port ownership check is likely failing — which would indicate the local port on that connection is not attributed to `D2R.exe` by the OS.
-
----
-
-**A game join was not counted (false negative)**
-Look in `logs/packet.log` for an `EXPIRED` entry near the time of the missed join. The `reason=` field identifies the failing check. If the disqualifier seems wrong (e.g. the outbound max was 520b on a legitimate game join), adjust the relevant threshold in `main.py` and note the metric values — see [Log-Driven Threshold Tuning](#log-driven-threshold-tuning).
-
----
-
-**The counter incremented when I did not join a game (false positive)**
-Find the `JOINED` entry in `packet.log`. It includes the server IP, total bytes, burst, ratio, and all outbound metrics. If a non-game connection was promoted, the most diagnostic values are `inbound_ratio`, `out_max`, and `out_avg`. Tighten the relevant threshold and test again.
-
----
-
-**The system tray icon is missing (packaged .exe)**
-PyInstaller bundles `off.ico` but it is extracted to a temporary path at runtime, not the working directory. To fix this, update `overlay_manager.py` before building to resolve the icon path from `sys._MEIPASS`:
-
-```python
-import sys, os
-
-def _resource(name: str) -> str:
-    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base, name)
-```
-
-Then change `QIcon("off.ico")` to `QIcon(_resource("off.ico"))`.
-
----
-
-**"Previous session ended without a clean exit"**
-Printed on startup when `stats.json` has a `started_at` but no `ended_at` for the last run. This means the previous session was force-killed or crashed. All recorded stats from that session are preserved; only the session end time and final elapsed time are missing. This message is informational — no action required.
-
----
-
-**Stats window shows `—` for all values**
-`stats.json` does not exist yet (no completed games recorded) or was deleted. Play a game and exit normally; the file will be created and populated on first join/leave.
-
----
-
-## 11. Building from Source
+## Building from Source
 
 ### Overview
 
 D2R Counter is packaged with [PyInstaller](https://pyinstaller.org). The recommended mode is `--onedir`: a folder containing the `.exe` with all dependencies unpacked alongside it. This starts instantly. The alternative `--onefile` packs everything into a single binary that extracts to a temp directory on every launch, adding several seconds to startup time.
 
-`stats.json`, `config.json`, and `logs/` are runtime-generated files. They are created in the working directory when the exe runs — normally the folder the exe lives in. Do not bundle them with PyInstaller.
-
-### Before Building — Tray Icon Path
-
-When running via PyInstaller, bundled data files are extracted to `sys._MEIPASS`, not the working directory. The `off.ico` path in `overlay_manager.py` needs updating before building or the tray icon will silently fail to load.
-
-In `overlay_manager.py`, add this helper and update the icon line:
-
-```python
-import sys, os
-
-def _resource(name: str) -> str:
-    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base, name)
-
-# In OverlayManager.__init__, change:
-self._tray.setIcon(QIcon("off.ico"))
-# to:
-self._tray.setIcon(QIcon(_resource("off.ico")))
-```
+`stats.json`, `config.json`, and `logs/` are runtime-generated files. They are created in the working directory when the exe runs. Do not bundle them with PyInstaller.
 
 ### build.bat
 
-Place this file in the project root alongside `main.py` and run it from an Administrator command prompt.
+Place `build.bat` in the project root alongside `main.py` and run it from an Administrator command prompt.
 
 ```batch
 @echo off
@@ -551,124 +391,8 @@ Before distributing the `dist\D2RCounter\` folder:
 
 - [ ] `D2RCounter.exe` is present
 - [ ] `off.ico` is present in the same folder (added by `--add-data`)
-- [ ] The tray icon path fix has been applied (see above)
 - [ ] Npcap is installed on the target machine
 - [ ] The exe is launched as Administrator
-
----
-
-## 12. Function Reference
-
-### `main.py` — Module-Level Functions
-
-| Function | Description |
-|---|---|
-| `fmt_time()` | Returns current datetime as `YYYY-MM-DD HH:MM:SS` |
-| `is_external(ip)` | Returns `True` if the IP is not an RFC-1918 private address; filters out LAN and loopback traffic |
-| `get_local_ip()` | Detects the machine's primary outbound IP by opening a UDP socket toward `8.8.8.8` — no data is sent, the socket is immediately closed |
-| `get_d2r_pid()` | Iterates the running process list via psutil; returns the PID of `D2R.exe` or `None` |
-| `port_belongs_to_d2r(local_port, d2r_pid)` | Queries `psutil.net_connections()` to confirm a local TCP port is owned by D2R's PID |
-| `log_started()` | Writes a `*** APPLICATION STARTED ***` banner to both log files |
-| `packetlog_inbound_data(...)` | Writes a `DEBUG` line to `packet.log` with every per-packet classifier metric for the current candidate |
-| `packetlog_game_joined(c_ref)` | Writes a full `INFO` join summary (all metrics, all packet sizes) to `packet.log` |
-| `runlog_game_joined(c_ref, game_count)` | Writes a brief `INFO` join line to `run.log` |
-| `cmd_msg_started()` | Prints the startup banner with active threshold values and all-time stats to the console |
-| `cmd_msg_joined(c_ref, game_count)` | Prints a detailed join event (server IP, bytes received, peak burst, inbound ratio, outbound stats) to the console |
-| `_fmt_duration(seconds)` | Formats an integer number of seconds into `Xh Xm Xs`, `Xm Xs`, or `Xs` |
-| `handle_packet(pkt)` | Scapy per-packet callback; decodes TCP flags and calculates payload length, then routes to the appropriate `Session` method |
-| `expiry_loop()` | Daemon thread body; calls `session.expire_candidate()` every 250ms |
-| `pid_watch_loop()` | Daemon thread body; calls `session.refresh_pid()` every 5 seconds |
-| `sniffer_loop(bpf)` | Daemon thread body; blocks in `scapy.sniff()` with the BPF filter and `handle_packet` as the per-packet callback |
-| `set_bpf(ip)` | Builds the BPF expression string: `tcp port 443 and (src host <ip> or dst host <ip>)` |
-| `main()` | Entry point: detects local IP, starts the three background daemon threads, creates `OverlayManager`, wires `aboutToQuit` to `_on_quit` |
-
----
-
-### `main.py` — `StatsManager`
-
-Backed by `stats.json`. All public methods are thread-safe via a `threading.Lock`. All writes are atomic via a temp file and `os.replace()`.
-
-| Method | Description |
-|---|---|
-| `__init__(path)` | Loads `stats.json`, records `time.monotonic()` as the session start reference |
-| `_load()` | Reads and merges `stats.json` against defaults; returns a fresh default dict if the file is absent or corrupt |
-| `_save()` | Updates `elapsed_seconds` from the monotonic clock, serialises to `.tmp`, then atomically replaces the target file |
-| `on_session_start()` | Increments `total_sessions`, resets `last_run`, detects and logs unclean exits from previous runs |
-| `on_game_joined(server_ip, server_port)` | Increments total and session game counts, records first/last game timestamps, appends unique server entries |
-| `on_game_left(duration_seconds)` | Accumulates in-game time totals, updates longest-game and best-session records |
-| `on_session_end()` | Records `ended_at`, accumulates `total_app_seconds`, finalises the best-session record |
-| `avg_game_duration()` | Returns `total_game_seconds / total_games`, or `0.0` if no games recorded |
-| `print_summary()` | Formats and prints all-time and last-run stats to the console at startup |
-
----
-
-### `main.py` — `Conn`
-
-A `dataclass` representing one tracked TCP connection candidate. Keyed in `Session.conns` by `(server_ip, server_port, local_port)`. Accumulates per-packet data and computes all classifier metrics on demand.
-
-| Method | Description |
-|---|---|
-| `key()` | Returns the 3-tuple used as the dict key |
-| `age()` | Seconds elapsed since the SYN-ACK was recorded |
-| `add_inbound(size)` | Appends `(monotonic_time, size)` to the inbound list and increments `inbound_bytes` |
-| `add_outbound(size)` | Appends `(monotonic_time, size)` to the outbound list |
-| `packets` | Property; returns the raw inbound packet list |
-| `peak_burst(window)` | Two-pointer sliding window; returns the maximum inbound bytes in any `window`-second span |
-| `large_packet_count(threshold)` | Count of inbound packets strictly exceeding `threshold` bytes |
-| `consecutive_large_streak(threshold)` | Length of the longest unbroken run of inbound packets above `threshold` |
-| `mtu_packet_count()` | Count of inbound packets at or above 1400 bytes |
-| `max_consecutive_fast_inbound()` | Length of the longest run where inter-arrival gap is < 5ms |
-| `outbound_total()` | Sum of all outbound payload bytes |
-| `outbound_count()` | Number of outbound packets recorded |
-| `max_outbound_packet()` | Largest single outbound packet in bytes |
-| `avg_outbound_size()` | Mean outbound packet size, or `0.0` if no outbound packets |
-| `inbound_ratio()` | `inbound_bytes / (inbound + outbound_total)` |
-| `disqualified_reason()` | Runs all hard-gate checks in order; returns a descriptive string on first failure, `None` if all pass |
-| `is_game_like()` | Runs `disqualified_reason()` first, then tests positive signals; returns `True` if the connection should be promoted to IN_GAME |
-
----
-
-### `main.py` — `Session`
-
-Manages the `IDLE → TRACKING → IN_GAME` state machine. Holds the active `Conn` candidate dict and the confirmed game server reference. Thread-safe via `self.lock`.
-
-| Method | Description |
-|---|---|
-| `refresh_pid()` | Checks the process list for `D2R.exe`; logs and handles process open and close events |
-| `check_bnet_already_connected(pid)` | On D2R attach, checks for existing `ESTABLISHED` connections on port 443 belonging to D2R's PID |
-| `on_syn_ack(server_ip, server_port, local_port)` | Verifies port ownership; creates a new `Conn` candidate and transitions to TRACKING if not already IN_GAME |
-| `on_inbound_data(server_ip, server_port, local_port, byte_count)` | Feeds bytes to the matching candidate; promotes to IN_GAME and emits `signals.joined` if `is_game_like()` returns `True` |
-| `on_outbound_data(server_ip, server_port, local_port, byte_count)` | Records outbound bytes to the matching candidate for ratio calculations |
-| `on_outbound_fin(server_ip, server_port, local_port)` | Handles game leave: calculates duration, transitions to IDLE, updates stats, emits `signals.left` |
-| `expire_candidate()` | Discards candidates older than `DATA_BURST_WINDOW`; uses non-game expired candidates to infer Battle.net connectivity |
-
----
-
-### `overlay_manager.py` and `overlay.py`
-
-`OverlayManager` is the central Qt controller. It owns the system tray icon, both menus (on-overlay and tray), a 50ms tick timer forwarded to the active overlay, and the lifetimes of all popup windows (`HintWindow`, `StatsWindow`, `AboutWindow`, `_SetCountDialog`).
-
-Game events flow in via `signals.joined` and `signals.left` — two `pyqtSignal` signals on a `QObject` (`_GameSignals`). Both are connected with `Qt.ConnectionType.QueuedConnection`, which marshals the signal from the sniffer's background thread onto the Qt main thread before the slot executes. This is what makes it safe to call Qt widget methods from a `threading.Thread` without locks.
-
-`Overlay` is a plain class (not a `QWidget`) that composes `DotWindow` and `StatPanel`. It exposes a clean interface — `on_joined()`, `on_left()`, `tick()`, `move_to()`, `set_game_count()`, `get_game_count()`, `show()`, `hide()` — that `OverlayManager` calls without knowing the internal window structure. This separation means the overlay style could be replaced with a different implementation without changing any manager code.
-
-The on-overlay context menu is rebuilt from scratch on every open so its labels always reflect current state (hide vs show, checked state of Remember count). It is a `QMenu` with `FramelessWindowHint | Popup | NoDropShadowWindowHint` and `WA_TranslucentBackground`, producing clean rounded corners on Windows. The tray menu uses the OS default style — Qt's native tray menus interact unreliably with stylesheet transparency on Windows.
-
----
-
-### UI Windows — Common Patterns
-
-All popup windows (`StatsWindow`, `AboutWindow`, `_SetCountDialog`) share the same construction and rendering patterns:
-
-**Window flags:** `FramelessWindowHint | WindowStaysOnTopHint | Tool | NoDropShadowWindowHint` combined with `WA_TranslucentBackground` removes all OS window chrome and produces a floating transparent panel. The `Tool` flag prevents the window from appearing in the taskbar.
-
-**Painting:** Background, border, and dividers are drawn entirely in `paintEvent` via `QPainter` with antialiasing. The background is a filled rounded rectangle in the near-black `BG` colour. The border is a 1px gold rounded rectangle drawn offset by 1px to sit inside the widget bounds. A dim `DIVIDER`-coloured line separates the title header from the content area. There are no stylesheets on the windows themselves — only on child widgets (buttons, spin boxes).
-
-**Dragging:** All windows are draggable from any point on their surface. `mousePressEvent` stores `event.globalPosition().toPoint() - self.frameGeometry().topLeft()` as the drag anchor. `mouseMoveEvent` calls `self.move(event.globalPosition().toPoint() - self._drag_pos)`. `mouseReleaseEvent` clears the anchor. This three-method pattern is identical across all draggable windows.
-
-**Label layout:** Labels are placed with absolute coordinates using `move()`. Each label sets `WA_TranslucentBackground` (so the QPainter-drawn background shows through) and calls `adjustSize()` after text is set. Right-aligned labels compute their x position as `W - PAD_R - label.width()`. There are no Qt layout managers. Window height is computed from the content data at module load time, before any widget is created.
-
-**Theme:** All colours, window flag constants, and QSS strings are defined in `theme.py` and imported. `overlay.py` and `hint.py` are self-contained with their own local palettes and are not modified by theme changes.
 
 ---
 

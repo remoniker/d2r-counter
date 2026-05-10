@@ -1,0 +1,38 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyinstaller scapy psutil PyQt6
+
+      - name: Build
+        run: >
+          pyinstaller
+          --noconsole
+          --icon=assets\off.ico
+          --add-data "assets\off.ico;."
+          --name D2RCounter
+          src\main.py
+
+      - name: Zip output
+        run: Compress-Archive -Path dist\D2RCounter\* -DestinationPath D2RCounter.zip
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: D2RCounter.zip

@@ -30,10 +30,10 @@ echo.
 echo [2/2] Running PyInstaller...
 pyinstaller ^
     %CONSOLE_FLAG% ^
-    --icon=off.ico ^
-    --add-data "off.ico;." ^
+    --icon=assets\off.ico ^
+    --add-data "assets\off.ico;." ^
     --name %BUILD_NAME% ^
-    main.py
+    src\main.py
 if errorlevel 1 ( echo ERROR: PyInstaller failed. & pause & exit /b 1 )
 
 echo.

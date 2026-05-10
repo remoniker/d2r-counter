@@ -44,8 +44,11 @@ _app = QApplication.instance() or QApplication(sys.argv)
 
 
 def _resource(name: str) -> str:
-    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base, name)
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, name)
+    # Running from source: assets/ is at project root, one level above src/
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(root, "assets", name)
 
 
 def _get_styles() -> dict[str, type]:

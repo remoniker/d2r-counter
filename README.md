@@ -69,8 +69,8 @@ sc query npcap
 ```
 git clone <repo-url>
 cd D2RCounter
-pip install scapy psutil PyQt6
-python main.py        # must be run as Administrator
+pip install -r requirements.txt
+python src/main.py        # must be run as Administrator
 ```
 
 `stats.json`, `config.json`, and `logs/` are created on first run.

@@ -1,6 +1,7 @@
 # Runtime data
 stats.json
 config.json
+notes.txt
 
 # Logs
 logs/

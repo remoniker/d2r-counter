@@ -155,7 +155,7 @@ On a busy network the raw rate may be thousands of packets/sec; after BPF, D2R C
          SYN-ACK from external:443, local port verified to D2R.exe PID
   IDLE ──────────────────────────────────────────────────────────────► TRACKING
    ▲                                                                        │
-   │  All candidates expire (no burst within DATA_BURST_WINDOW = 6s)       │  is_game_like() → True
+   │  All candidates expire (no burst within DATA_BURST_WINDOW = 6s)        │  is_game_like() → True
    │◄───────────────────────────────────────────────────────────────────────┤
    │                                                                        ▼
    └──────────────────────────────────────────────────────────────────── IN_GAME
@@ -327,7 +327,7 @@ User preferences. Created on first setting change or clean quit.
 
 ## Building from Source
 
-Uses [PyInstaller](https://pyinstaller.org) in `--onedir` mode: a folder with the exe and unpacked dependencies. Instant startup. `--onefile` extracts to a temp dir on every launch — several second penalty, not recommended.
+Uses [PyInstaller](https://pyinstaller.org) in `--onedir` mode: a folder with the exe and unpacked dependencies.
 
 `stats.json`, `config.json`, and `logs/` are runtime-generated. Do not bundle them.
 
@@ -335,10 +335,8 @@ Uses [PyInstaller](https://pyinstaller.org) in `--onedir` mode: a folder with th
 
 Run from an Administrator command prompt in the project root. Prompts for build type:
 
-- **Release** (`--noconsole`) — no terminal window. Use this for distribution.
-- **Dev** (`--console`) — terminal visible, same console output as running from source. Use for local testing of the packaged build.
-
-During normal development, run `python main.py` directly — no need to build.
+- **Release** (`--noconsole`) — no terminal window.
+- **Dev** (`--console`) — terminal visible, same console output as running from source (e.g., python main.py).
 
 ### Scapy Hidden Imports
 
@@ -349,14 +347,6 @@ If the packaged exe crashes on startup with an `ImportError`, add to the PyInsta
 --hidden-import scapy.layers.inet
 --hidden-import scapy.arch.windows
 ```
-
-### Distribution Checklist
-
-- [ ] `D2RCounter.exe` present in `dist\D2RCounter\`
-- [ ] `off.ico` present in same folder
-- [ ] Npcap installed on target machine
-- [ ] Launched as Administrator
-
 ---
 
 ## License

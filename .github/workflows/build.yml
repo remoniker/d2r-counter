@@ -21,7 +21,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install pyinstaller scapy psutil PyQt6
+        run: pip install pyinstaller scapy psutil PyQt6 Pillow
 
       - name: Build
         run: >

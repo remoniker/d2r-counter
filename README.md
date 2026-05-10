@@ -50,7 +50,7 @@ Passive game-session tracker for Diablo II: Resurrected. Reads local TCP traffic
 
 ## Installation
 
-**[Download latest release →](https://github.com/USERNAME/D2RCounter/releases/latest)**
+**[Download latest release →](https://github.com/remoniker/d2r-counter/releases/latest)**
 
 Extract anywhere. Right-click `D2RCounter.exe` → **Run as administrator**.
 

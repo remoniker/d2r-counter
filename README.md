@@ -17,7 +17,7 @@ Passive game-session tracker for Diablo II: Resurrected. Reads local TCP traffic
 
 **[⬇ Download D2RCounter.zip](https://github.com/remoniker/d2r-counter/releases/download/v1.5/D2RCounter.zip)** — Windows 10/11 · Npcap installed automatically if needed
 
-*Extract anywhere and run `D2RCounter.exe` as administrator. [Full install details and source instructions below.](#installation)*
+*Extract anywhere and double-click `D2RCounter.exe` — UAC and Npcap are handled automatically. [Source instructions below.](#installation)*
 
 ---
 
@@ -46,27 +46,17 @@ Passive game-session tracker for Diablo II: Resurrected. Reads local TCP traffic
 ## Requirements
 
 - Windows 10 / 11
-- [Npcap](https://npcap.com/#download) with *WinPcap API-compatible mode* enabled
-- Administrator privileges
+- Administrator privileges (UAC prompt appears on launch automatically)
+- Npcap — installed automatically on first run if not present
 - D2R.exe — does not need to be running at launch
 
 ---
 
 ## Installation
 
-**[Latest release details  →](https://github.com/remoniker/d2r-counter/releases/latest)**  
-**[Download latest release  →](https://github.com/remoniker/d2r-counter/releases/download/v1.4/D2RCounter.zip)**
+**[⬇ Download D2RCounter.zip](https://github.com/remoniker/d2r-counter/releases/download/v1.5/D2RCounter.zip)** · **[All releases](https://github.com/remoniker/d2r-counter/releases/latest)**
 
-
-Extract anywhere. Right-click `D2RCounter.exe` → **Run as administrator**.
-
-**Npcap** ships with Wireshark and may already be installed. To check:
-
-```
-sc query npcap
-```
-
-`STATE: 4  RUNNING` means you're good. Otherwise [download Npcap](https://npcap.com/#download) and enable WinPcap compatibility during setup.
+Extract anywhere. Double-click `D2RCounter.exe` — a UAC prompt will appear, click Yes. If Npcap is not installed, the app will offer to install it automatically.
 
 **From source:**
 

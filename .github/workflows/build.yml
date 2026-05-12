@@ -27,6 +27,7 @@ jobs:
         run: >
           pyinstaller
           --noconsole
+          --uac-admin
           --icon=assets\off.ico
           --add-data "assets\off.ico;."
           --name D2RCounter

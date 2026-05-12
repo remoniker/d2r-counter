@@ -30,6 +30,7 @@ echo.
 echo [2/2] Running PyInstaller...
 pyinstaller ^
     %CONSOLE_FLAG% ^
+    --uac-admin ^
     --icon=assets\off.ico ^
     --add-data "assets\off.ico;." ^
     --name %BUILD_NAME% ^

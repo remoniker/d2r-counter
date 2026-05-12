@@ -15,7 +15,7 @@ Passive game-session tracker for Diablo II: Resurrected. Reads local TCP traffic
   </tr>
 </table>
 
-**[⬇ Download D2RCounter.zip](https://github.com/remoniker/d2r-counter/releases/download/v1.3/D2RCounter.zip)** — Windows 10/11 · Requires [Npcap](https://npcap.com/#download) · Run as Administrator
+**[⬇ Download D2RCounter.zip](https://github.com/remoniker/d2r-counter/releases/download/v1.4/D2RCounter.zip)** — Windows 10/11 · Run as Administrator · Npcap installed automatically if needed
 
 *Extract anywhere and run `D2RCounter.exe` as administrator. [Full install details and source instructions below.](#installation)*
 
@@ -55,7 +55,7 @@ Passive game-session tracker for Diablo II: Resurrected. Reads local TCP traffic
 ## Installation
 
 **[Latest release details  →](https://github.com/remoniker/d2r-counter/releases/latest)**  
-**[Download latest release  →](https://github.com/remoniker/d2r-counter/releases/download/v1.3/D2RCounter.zip)**
+**[Download latest release  →](https://github.com/remoniker/d2r-counter/releases/download/v1.4/D2RCounter.zip)**
 
 
 Extract anywhere. Right-click `D2RCounter.exe` → **Run as administrator**.

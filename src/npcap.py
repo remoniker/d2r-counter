@@ -42,7 +42,7 @@ def ensure() -> None:
     tmp = os.path.join(tempfile.gettempdir(), "npcap-installer.exe")
     try:
         urllib.request.urlretrieve(_INSTALLER_URL, tmp)
-        subprocess.run([tmp, "/S", "/winpcap_mode=yes"], check=True)
+        subprocess.run([tmp, "/winpcap_mode=yes"], check=True)
     except Exception as e:
         QMessageBox.critical(
             None,

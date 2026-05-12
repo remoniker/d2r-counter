@@ -1,3 +1,6 @@
+# Editor
+.vscode/
+
 # Runtime data
 stats.json
 config.json

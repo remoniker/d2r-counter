@@ -25,6 +25,7 @@ from typing import Optional
 import logging
 from logging.handlers import RotatingFileHandler
 
+import npcap
 from config import config
 
 os.makedirs("logs", exist_ok=True)
@@ -899,6 +900,7 @@ def set_bpf(ip: str) -> str:
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
+    npcap.ensure()
     log_started()
 
     global LOCAL_IP
